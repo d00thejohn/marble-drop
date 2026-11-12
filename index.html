@@ -139,7 +139,7 @@ canvas{display:block;width:100%;height:auto}
           </div>
         </div>
         <div class="board-foot">
-          <span>왼쪽 칸부터 · 같은 칸은 위에서부터</span>
+          <span>최종 순서는 왼쪽에서 오른쪽으로</span>
           <label id="speed-control" class="speed" hidden>속도 <select id="speed">
             <option value="0.2">×0.2</option><option value="0.3" selected>×0.3</option><option value="0.4">×0.4</option>
             <option value="0.5">×0.5</option><option value="0.6">×0.6</option><option value="0.75">×0.75</option>
@@ -157,7 +157,7 @@ canvas{display:block;width:100%;height:auto}
           <div id="names" class="name-grid"></div>
           <p id="form-error" role="alert" hidden></p>
           <button id="start" class="primary" type="submit"><span aria-hidden="true">▶</span> 추첨 시작</button>
-          <p class="rules setup-rule">이름이 뜨는 차례는 무작위예요. 최종 순서는 <strong>왼쪽 칸부터</strong>, 같은 칸은 <strong>위쪽 구슬부터</strong> 읽어요.</p>
+          <p class="rules setup-rule">같은 칸에 떨어진 구슬은 한쪽으로 굴러가 <strong>첫 빈칸</strong>에 멈춰요. 최종 순서는 <strong>왼쪽부터</strong> 읽어요.</p>
         </form>
         <details id="running" hidden>
           <summary>구슬 낙하 순서 보기</summary>
@@ -197,21 +197,26 @@ const width = 900;
 const centerX = width / 2;
 const laneWidth = 56;
 const radius = 25;
-const stackPitch = 52;
-let height = 0;
 const rows = 14;
 const laneCount = rows + 1;
 const boardLeft = (width - laneCount * laneWidth) / 2;
 const boardRight = width - boardLeft;
 const binTop = 388;
-let floorY = 0;
+const floorY = binTop + 148;
+const height = floorY + 33;
+const restingY = floorY - radius - 1;
+const rollingY = restingY - 2 * radius;
+let viewLeft = 0;
+let viewWidth = width;
+let leftSlot = 0;
+let rightSlot = laneCount - 1;
 const laneX = lane => boardLeft + (lane + .5) * laneWidth;
 const pad = n => String(n).padStart(2,'0');
 const cryptoWord = new Uint32Array(1);
 const nameValues = Array(20).fill('');
 let participants = [];
 let drops = [];
-let lanes = emptyLanes();
+const settledSlots = new Map();
 let finalOrder = [];
 let completed = 0;
 let phase = 'setup';
@@ -224,10 +229,6 @@ let dropping = false;
 let audio;
 let sound = false;
 let formCount = 6;
-
-function emptyLanes(){
-  return Array.from({length:laneCount}, () => []);
-}
 
 function randomInt(max){
   const limit = 2 ** 32 - (2 ** 32 % max);
@@ -244,10 +245,17 @@ function shuffled(list){
   return result;
 }
 
+function findOpenSlot(lane,taken){
+  if(!taken.has(lane)) return lane;
+  const direction = randomInt(2) ? 1 : -1;
+  let slot = lane + direction;
+  while(taken.has(slot)) slot += direction;
+  return slot;
+}
+
 function planRound(people){
-  const stacks = emptyLanes();
-  const order = shuffled(people);
-  const planned = order.map(person => {
+  const taken = new Set();
+  return shuffled(people).map(person => {
     const path = [centerX];
     let lane = 0;
     for(let row = 0; row < rows; row++){
@@ -255,16 +263,19 @@ function planRound(people){
       lane += right;
       path.push(path.at(-1) + (right ? 1 : -1) * laneWidth / 2);
     }
-    const drop = {person,path,lane,level:stacks[lane].length};
-    stacks[lane].push(drop);
-    return drop;
+    const slot = findOpenSlot(lane,taken);
+    taken.add(slot);
+    return {person,path,lane,slot};
   });
-  const maxStack = Math.max(...stacks.map(stack => stack.length));
-  return {planned,maxStack};
 }
 
-function rankLanes(stacks){
-  return stacks.flatMap(stack => [...stack].reverse());
+function slotLabel(slot,compact = false){
+  if(slot < 0) return compact ? `L${pad(-slot)}` : `왼쪽 추가 ${-slot}번 칸`;
+  if(slot >= laneCount){
+    const extra = slot - laneCount + 1;
+    return compact ? `R${pad(extra)}` : `오른쪽 추가 ${extra}번 칸`;
+  }
+  return compact ? pad(slot+1) : `${pad(slot+1)}번 칸`;
 }
 
 function phaseTo(next){
@@ -396,11 +407,10 @@ function dropNext(){
 
 function startRound(){
   cancelAnimationFrame(frame);
-  const plan = planRound(participants);
-  drops = plan.planned;
-  resizeBoard(plan.maxStack);
+  drops = planRound(participants);
+  resizeBoard(drops);
   $('running').open = false;
-  lanes = emptyLanes();
+  settledSlots.clear();
   finalOrder = [];
   completed = 0;
   time = 0;
@@ -420,7 +430,7 @@ function startRound(){
 function editNames(){
   cancelAnimationFrame(frame);
   phaseTo('setup');
-  lanes = emptyLanes();
+  settledSlots.clear();
   finalOrder = [];
   $('status').textContent = '추첨 대기 중';
   updateProgress(0,formCount);
@@ -428,7 +438,7 @@ function editNames(){
 }
 
 function finishRound(){
-  finalOrder = rankLanes(lanes);
+  finalOrder = [...settledSlots.values()].sort((a,b) => a.slot - b.slot);
   const list = $('result-list');
   list.replaceChildren();
   finalOrder.forEach((drop,index) => {
@@ -444,7 +454,7 @@ function finishRound(){
     name.textContent = drop.person.name;
     const lane = document.createElement('span');
     lane.className = 'lane';
-    lane.textContent = `${pad(drop.lane + 1)}번 칸`;
+    lane.textContent = slotLabel(drop.slot);
     item.append(name,lane);
     list.append(item);
   });
@@ -457,8 +467,8 @@ function finishRound(){
 }
 
 function settle(drop){
-  lanes[drop.lane].push(drop);
-  $('drop-list').children[completed].lastElementChild.textContent = `${pad(drop.lane+1)}번 칸`;
+  settledSlots.set(drop.slot,drop);
+  $('drop-list').children[completed].lastElementChild.textContent = slotLabel(drop.slot);
   completed++;
   updateProgress(completed,drops.length);
   playTone(310,.14,'sine');
@@ -468,12 +478,9 @@ const entranceTime = 210;
 const pegTime = 124;
 const exitTime = entranceTime + rows * pegTime;
 const landingTime = exitTime + 390;
-const nextDropTime = landingTime + 210;
 const pegY = row => 78 + 22 * row;
-
-function stackY(level){
-  return floorY - radius - level * stackPitch - 1;
-}
+const rollDuration = drop => drop.slot === drop.lane ? 0 : 160 + 100 * Math.abs(drop.slot-drop.lane);
+const slideY = (from,to,t) => from + (to-from)*t*t;
 
 function position(drop,elapsed){
   if(elapsed <= entranceTime){
@@ -488,8 +495,18 @@ function position(drop,elapsed){
     const x = drop.path[row] + (drop.path[row+1]-drop.path[row])*t;
     return [x,start + (end-start)*t - 8*Math.sin(Math.PI*t)];
   }
-  const t = Math.min(1,(elapsed - exitTime)/(landingTime - exitTime));
-  return [laneX(drop.lane),binTop - 7 + (stackY(drop.level) - binTop + 7)*t*t];
+  const duration = rollDuration(drop);
+  if(elapsed <= landingTime){
+    const t = (elapsed-exitTime)/(landingTime-exitTime);
+    return [laneX(drop.lane),slideY(binTop-7,duration ? rollingY : restingY,t)];
+  }
+  if(!duration) return [laneX(drop.slot),restingY];
+
+  const t = Math.min(1,(elapsed-landingTime)/duration);
+  const travel = Math.min(1,t/.78);
+  const x = laneX(drop.lane + (drop.slot-drop.lane)*travel);
+  if(travel < 1) return [x,rollingY-9*Math.sin(Math.PI*travel)];
+  return [x,slideY(rollingY,restingY,(t-.78)/.22)];
 }
 
 function animate(now){
@@ -497,11 +514,10 @@ function animate(now){
   const speed = Number($('speed').value);
   time += Math.min(now-(previousFrame ?? now),64)*speed;
   previousFrame = now;
-  if(time >= landingTime && lastPeg !== -1){
-    settle(drops[completed]);
-    lastPeg = -1;
-  }
-  if(time >= nextDropTime){
+  const drop = drops[completed];
+  const duration = rollDuration(drop);
+  if(time >= landingTime + duration){
+    settle(drop);
     dropping = false;
     if(completed === drops.length) finishRound();
     else {
@@ -510,17 +526,17 @@ function animate(now){
     }
     return;
   }
-  if(lastPeg === -1){
-    drawBoard();
-  } else {
-    const drop = drops[completed];
-    const hit = Math.max(0,Math.min(rows,1+Math.floor((time-entranceTime)/pegTime)));
-    if(hit > lastPeg){
-      lastPeg = hit;
-      playTone(530 + hit * 42,.055,'triangle');
-    }
-    drawBoard(drop,time);
+  if(time >= landingTime){
+    const direction = drop.slot < drop.lane ? '왼쪽' : '오른쪽';
+    const status = `${drop.person.name} 구슬이 ${direction} 빈칸으로 이동 중`;
+    if($('status').textContent !== status) $('status').textContent = status;
   }
+  const hit = Math.max(0,Math.min(rows,1+Math.floor((time-entranceTime)/pegTime)));
+  if(hit > lastPeg){
+    lastPeg = hit;
+    playTone(530 + hit * 42,.055,'triangle');
+  }
+  drawBoard(drop,time);
   frame = requestAnimationFrame(animate);
 }
 
@@ -596,10 +612,13 @@ function drawMarble(x,y,person){
   ctx.restore();
 }
 
-function resizeBoard(maxStack){
-  floorY = binTop + Math.max(148, maxStack * stackPitch + 8);
-  height = floorY + 33;
-  canvas.width = backdrop.width = width * 2;
+function resizeBoard(planned){
+  const slots = planned.map(drop => drop.slot);
+  leftSlot = Math.min(0,...slots);
+  rightSlot = Math.max(laneCount-1,...slots);
+  viewLeft = leftSlot * laneWidth;
+  viewWidth = width + (rightSlot-leftSlot-laneCount+1)*laneWidth;
+  canvas.width = backdrop.width = viewWidth * 2;
   canvas.height = backdrop.height = height * 2;
   paintBackdrop();
 }
@@ -620,19 +639,19 @@ function drawArch(offset,color){
 }
 
 function paintBackdrop(){
-  ctx.setTransform(2,0,0,2,0,0);
+  ctx.setTransform(2,0,0,2,-viewLeft*2,0);
   const background = ctx.createLinearGradient(0,0,0,height);
   background.addColorStop(0,'#fff9e9');
   background.addColorStop(.54,'#f0f1f5');
   background.addColorStop(1,'#faf4e5');
   ctx.fillStyle = background;
-  ctx.fillRect(0,0,width,height);
+  ctx.fillRect(viewLeft,0,viewWidth,height);
   const glow = ctx.createRadialGradient(centerX,28,0,centerX,62,330);
   glow.addColorStop(0,'#fff1bf');
   glow.addColorStop(.5,'#fff6d5ac');
   glow.addColorStop(1,'#fff6d500');
   ctx.fillStyle = glow;
-  ctx.fillRect(0,0,width,binTop);
+  ctx.fillRect(viewLeft,0,viewWidth,binTop);
 
   // Translucent panels and tracery echo a chapel window behind the pegs.
   const panels = ['#cfdeef72','#f0deb878','#eee4f36b','#f0deb878','#cfdeef72'];
@@ -666,26 +685,28 @@ function paintBackdrop(){
 }
 
 function drawBoard(active,elapsed){
-  ctx.drawImage(backdrop,0,0,width,height);
-  for(let lane=0;lane<laneCount;lane++){
-    const x = laneX(lane);
-    const occupied = lanes[lane].length > 0;
-    ctx.fillStyle = occupied ? '#f2e6cbbd' : lane % 2 ? '#f9f5eaac' : '#edf0f7b8';
+  ctx.drawImage(backdrop,viewLeft,0,viewWidth,height);
+  for(let slot=leftSlot;slot<=rightSlot;slot++){
+    const x = laneX(slot);
+    const occupied = settledSlots.has(slot);
+    const extra = slot < 0 || slot >= laneCount;
+    const top = extra ? rollingY-radius : binTop;
+    ctx.fillStyle = occupied ? '#f2e6cbbd' : extra ? '#ebdfc97a' : slot % 2 ? '#f9f5eaac' : '#edf0f7b8';
     const left = x - laneWidth/2;
-    ctx.fillRect(left+1,binTop,laneWidth-2,floorY-binTop);
-    line(left,binTop,left,floorY,'#bbac8d');
+    ctx.fillRect(left+1,top,laneWidth-2,floorY-top);
+    line(left,top,left,floorY,'#bbac8d');
     ctx.fillStyle = occupied ? '#634719' : '#656679';
     ctx.font = '600 15px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(pad(lane+1),x,floorY + 17);
+    ctx.fillText(slotLabel(slot,true),x,floorY + 17);
   }
-  line(boardRight,binTop,boardRight,floorY,'#bbac8d');
-  line(boardLeft,floorY,boardRight,floorY,'#a2824b',1.4);
+  const trayLeft = laneX(leftSlot) - laneWidth/2;
+  const trayRight = laneX(rightSlot) + laneWidth/2;
+  line(trayRight,rightSlot >= laneCount ? rollingY-radius : binTop,trayRight,floorY,'#bbac8d');
+  line(trayLeft,floorY,trayRight,floorY,'#a2824b',1.4);
 
-  lanes.forEach((stack,lane) => {
-    stack.forEach((drop,level) => drawMarble(laneX(lane),stackY(level),drop.person));
-  });
+  settledSlots.forEach((drop,slot) => drawMarble(laneX(slot),restingY,drop.person));
 
   if(active){
     const color = active.person.color;
@@ -804,8 +825,7 @@ $('pause').addEventListener('click',() => {
     $('status').textContent = '일시정지';
   } else {
     previousFrame = null;
-    if(lastPeg === -1) $('status').textContent = '구슬 착지 완료';
-    else setActive();
+    setActive();
     frame = requestAnimationFrame(animate);
   }
 });
