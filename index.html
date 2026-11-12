@@ -157,7 +157,7 @@ canvas{display:block;width:100%;height:auto}
           <div id="names" class="name-grid"></div>
           <p id="form-error" role="alert" hidden></p>
           <button id="start" class="primary" type="submit"><span aria-hidden="true">▶</span> 추첨 시작</button>
-          <p class="rules setup-rule">같은 칸에 떨어진 구슬은 한쪽으로 굴러가 <strong>첫 빈칸</strong>에 멈춰요. 최종 순서는 <strong>왼쪽부터</strong> 읽어요.</p>
+          <p class="rules setup-rule">구슬이 들어간 칸은 삼각형 지붕으로 닫혀요. 지붕에 닿은 구슬은 한쪽으로 이동해 <strong>첫 열린 칸</strong>으로 떨어져요. 최종 순서는 <strong>왼쪽부터</strong> 읽어요.</p>
         </form>
         <details id="running" hidden>
           <summary>구슬 낙하 순서 보기</summary>
@@ -205,7 +205,10 @@ const binTop = 388;
 const floorY = binTop + 148;
 const height = floorY + 33;
 const restingY = floorY - radius - 1;
-const rollingY = restingY - 2 * radius;
+const gateY = binTop + 32;
+const roofY = gateY - 24;
+const rollingY = roofY - radius;
+const exitY = rollingY - 10;
 let viewLeft = 0;
 let viewWidth = width;
 let leftSlot = 0;
@@ -479,7 +482,7 @@ const pegTime = 124;
 const exitTime = entranceTime + rows * pegTime;
 const landingTime = exitTime + 390;
 const pegY = row => 78 + 22 * row;
-const rollDuration = drop => drop.slot === drop.lane ? 0 : 160 + 100 * Math.abs(drop.slot-drop.lane);
+const rollDuration = drop => drop.slot === drop.lane ? 0 : 260 + 100 * Math.abs(drop.slot-drop.lane);
 const slideY = (from,to,t) => from + (to-from)*t*t;
 
 function position(drop,elapsed){
@@ -491,22 +494,22 @@ function position(drop,elapsed){
     const row = Math.floor((elapsed - entranceTime) / pegTime);
     const t = (elapsed - entranceTime - row * pegTime) / pegTime;
     const start = pegY(row)-radius-4;
-    const end = row === rows - 1 ? binTop - 7 : pegY(row+1)-radius-4;
+    const end = row === rows - 1 ? exitY : pegY(row+1)-radius-4;
     const x = drop.path[row] + (drop.path[row+1]-drop.path[row])*t;
     return [x,start + (end-start)*t - 8*Math.sin(Math.PI*t)];
   }
   const duration = rollDuration(drop);
   if(elapsed <= landingTime){
     const t = (elapsed-exitTime)/(landingTime-exitTime);
-    return [laneX(drop.lane),slideY(binTop-7,duration ? rollingY : restingY,t)];
+    return [laneX(drop.lane),slideY(exitY,duration ? rollingY : restingY,t)];
   }
   if(!duration) return [laneX(drop.slot),restingY];
 
   const t = Math.min(1,(elapsed-landingTime)/duration);
-  const travel = Math.min(1,t/.78);
+  const travel = Math.min(1,t/.7);
   const x = laneX(drop.lane + (drop.slot-drop.lane)*travel);
   if(travel < 1) return [x,rollingY-9*Math.sin(Math.PI*travel)];
-  return [x,slideY(rollingY,restingY,(t-.78)/.22)];
+  return [x,slideY(rollingY,restingY,(t-.7)/.3)];
 }
 
 function animate(now){
@@ -690,11 +693,24 @@ function drawBoard(active,elapsed){
     const x = laneX(slot);
     const occupied = settledSlots.has(slot);
     const extra = slot < 0 || slot >= laneCount;
-    const top = extra ? rollingY-radius : binTop;
+    const top = extra ? gateY : binTop;
     ctx.fillStyle = occupied ? '#f2e6cbbd' : extra ? '#ebdfc97a' : slot % 2 ? '#f9f5eaac' : '#edf0f7b8';
     const left = x - laneWidth/2;
     ctx.fillRect(left+1,top,laneWidth-2,floorY-top);
     line(left,top,left,floorY,'#bbac8d');
+    if(occupied){
+      ctx.beginPath();
+      ctx.moveTo(left,gateY);
+      ctx.lineTo(x,roofY);
+      ctx.lineTo(left+laneWidth,gateY);
+      ctx.closePath();
+      ctx.fillStyle = '#e9d2a5';
+      ctx.fill();
+      ctx.strokeStyle = '#99723c';
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
     ctx.fillStyle = occupied ? '#634719' : '#656679';
     ctx.font = '600 15px monospace';
     ctx.textAlign = 'center';
@@ -703,7 +719,7 @@ function drawBoard(active,elapsed){
   }
   const trayLeft = laneX(leftSlot) - laneWidth/2;
   const trayRight = laneX(rightSlot) + laneWidth/2;
-  line(trayRight,rightSlot >= laneCount ? rollingY-radius : binTop,trayRight,floorY,'#bbac8d');
+  line(trayRight,rightSlot >= laneCount ? gateY : binTop,trayRight,floorY,'#bbac8d');
   line(trayLeft,floorY,trayRight,floorY,'#a2824b',1.4);
 
   settledSlots.forEach((drop,slot) => drawMarble(laneX(slot),restingY,drop.person));
