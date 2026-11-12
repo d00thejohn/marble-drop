@@ -157,7 +157,7 @@ canvas{display:block;width:100%;height:auto}
           <div id="names" class="name-grid"></div>
           <p id="form-error" role="alert" hidden></p>
           <button id="start" class="primary" type="submit"><span aria-hidden="true">▶</span> 추첨 시작</button>
-          <p class="rules setup-rule">구슬이 들어간 칸은 삼각형 지붕으로 닫혀요. 지붕에 닿은 구슬은 한쪽으로 이동해 <strong>첫 열린 칸</strong>으로 떨어져요. 최종 순서는 <strong>왼쪽부터</strong> 읽어요.</p>
+          <p class="rules setup-rule">구슬이 들어간 칸은 삼각형 지붕으로 닫히고, 이웃한 지붕은 평행사변형으로 연결돼요. 구슬은 막힌 곳을 지나 <strong>첫 열린 칸</strong>으로 떨어져요. 최종 순서는 <strong>왼쪽부터</strong> 읽어요.</p>
         </form>
         <details id="running" hidden>
           <summary>구슬 낙하 순서 보기</summary>
@@ -207,8 +207,8 @@ const height = floorY + 33;
 const restingY = floorY - radius - 1;
 const gateY = binTop + 32;
 const roofY = gateY - 24;
-const rollingY = roofY - radius;
-const exitY = rollingY - 10;
+const bridgeY = roofY - 14;
+const exitY = bridgeY - radius - 10;
 let viewLeft = 0;
 let viewWidth = width;
 let leftSlot = 0;
@@ -269,8 +269,9 @@ function planRound(people){
       path.push(path.at(-1) + (right ? 1 : -1) * laneWidth / 2);
     }
     const slot = findOpenSlot(lane,taken);
+    const bridged = taken.has(lane-1) || taken.has(lane+1);
     taken.add(slot);
-    return {person,path,lane,slot};
+    return {person,path,lane,slot,bridged};
   });
 }
 
@@ -501,6 +502,7 @@ function position(drop,elapsed){
     return [x,start + (end-start)*t - 8*Math.sin(Math.PI*t)];
   }
   const duration = rollDuration(drop);
+  const rollingY = (drop.bridged ? bridgeY : roofY) - radius;
   if(elapsed <= landingTime){
     const t = (elapsed-exitTime)/(landingTime-exitTime);
     return [laneX(drop.lane),slideY(exitY,duration ? rollingY : restingY,t)];
@@ -689,6 +691,32 @@ function paintBackdrop(){
   backdrop.getContext('2d').drawImage(canvas,0,0);
 }
 
+function drawRoofBridges(){
+  for(let first=leftSlot;first<rightSlot;first++){
+    if(!settledSlots.has(first) || !settledSlots.has(first+1)) continue;
+    let last = first+1;
+    while(settledSlots.has(last+1)) last++;
+
+    const left = laneX(first);
+    const right = laneX(last);
+    ctx.fillStyle = '#e9d2a5';
+    ctx.fillRect(left,roofY,right-left,gateY-roofY);
+
+    ctx.beginPath();
+    ctx.moveTo(left-10,roofY);
+    ctx.lineTo(right+10,roofY);
+    ctx.lineTo(right+17,bridgeY);
+    ctx.lineTo(left-3,bridgeY);
+    ctx.closePath();
+    ctx.fillStyle = '#d8b97e';
+    ctx.fill();
+    ctx.strokeStyle = '#99723c';
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+    first = last;
+  }
+}
+
 function drawBoard(active,elapsed){
   ctx.drawImage(backdrop,viewLeft,0,viewWidth,height);
   for(let slot=leftSlot;slot<=rightSlot;slot++){
@@ -724,6 +752,7 @@ function drawBoard(active,elapsed){
   line(trayRight,rightSlot >= laneCount ? gateY : binTop,trayRight,floorY,'#bbac8d');
   line(trayLeft,floorY,trayRight,floorY,'#a2824b',1.4);
 
+  drawRoofBridges();
   settledSlots.forEach((drop,slot) => drawMarble(laneX(slot),restingY,drop.person));
 
   if(active){
