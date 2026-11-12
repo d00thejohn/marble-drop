@@ -151,7 +151,7 @@ canvas{display:block;width:100%;height:auto}
       <section class="panel" aria-label="참가자와 추첨 결과">
         <form id="setup" novalidate>
           <h2>참가자 등록</h2>
-          <p class="sub">이름을 등록한 뒤 추첨 화면에 나온 이름을 한 명씩 눌러 구슬을 떨어뜨려요.</p>
+          <p class="sub">이름을 비워두면 두성을 포함해 ‘성’으로 끝나는 예시 이름이 자동으로 채워져요.</p>
           <div class="form-row"><label for="count">참가 인원</label><input id="count" type="number" min="3" max="20" step="1" value="6" required></div>
           <div class="names-title"><span>참가자 이름</span><button type="button" id="demo" class="link">예시 이름 넣기</button></div>
           <div id="names" class="name-grid"></div>
@@ -186,7 +186,13 @@ backdrop.width = canvas.width;
 backdrop.height = canvas.height;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const colors = ['#dffc85','#78e5ff','#ff9d89','#c9a7ff','#ffcf70','#fba8d9','#75f0b0','#a8baff','#ffac68','#a8e6a6','#f7ef89','#80cffa','#f998b1','#b8a6ee','#ffa0a0','#70ded1','#d2ce8e','#c2d9ff','#e0a5cc','#8bf5ea'];
-const demoNames = ['민지','지훈','서연','현우','하은','도윤','수아','윤서','지우','예린','유진','서준','나연','은호','시우','연우','지민','가은','유나','하준'];
+const exampleNames = [
+  '가성','건성','경성','광성','규성','기성','다성','대성','도성','동성',
+  '명성','민성','보성','상성','서성','석성','선성','수성','시성','신성',
+  '아성','연성','영성','예성','우성','원성','유성','윤성','은성','인성',
+  '재성','정성','종성','준성','지성','진성','찬성','태성','하성','한성',
+  '해성','현성','형성','호성','효성','희성'
+];
 const width = 900;
 const centerX = width / 2;
 const laneWidth = 56;
@@ -309,6 +315,20 @@ function renderFields(n){
     $('names').append(label);
   }
   updateProgress(0,n);
+}
+
+function fillExampleNames(){
+  const current = nameValues.slice(0,formCount).map(name => name.trim());
+  const emptyCount = current.filter(name => !name).length;
+  if(!emptyCount) return;
+  const used = new Set(current);
+  const required = used.has('두성') ? [] : ['두성'];
+  const available = shuffled(exampleNames.filter(name => !used.has(name)));
+  const generated = shuffled([...required,...available.slice(0,emptyCount-required.length)]);
+  let next = 0;
+  current.forEach((name,index) => {
+    if(!name) nameValues[index] = generated[next++];
+  });
 }
 
 function showError(message){
@@ -755,7 +775,7 @@ $('count').addEventListener('input',() => {
 });
 $('demo').addEventListener('click',() => {
   if(!validCount()) $('count').value = String(formCount);
-  for(let index=0;index<formCount;index++) nameValues[index] ||= demoNames[index];
+  fillExampleNames();
   $('count').removeAttribute('aria-invalid');
   showError('');
   renderFields(formCount);
@@ -768,16 +788,9 @@ $('setup').addEventListener('submit',event => {
     $('count').focus();
     return;
   }
-  const inputs = Array.from($('names').querySelectorAll('input'));
-  const missing = inputs.findIndex(input => !input.value.trim());
-  if(missing !== -1){
-    const input = inputs[missing];
-    input.setAttribute('aria-invalid','true');
-    showError(`${missing+1}번 참가자의 이름을 입력해 주세요.`);
-    input.focus();
-    return;
-  }
-  participants = inputs.map((input,index) => ({name:input.value.trim(),color:colors[index]}));
+  fillExampleNames();
+  renderFields(formCount);
+  participants = nameValues.slice(0,formCount).map((name,index) => ({name:name.trim(),color:colors[index]}));
   showError('');
   startRound();
 });
