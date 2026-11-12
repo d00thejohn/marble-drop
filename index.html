@@ -22,6 +22,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .brand-mark svg{width:19px}
 .tool,.quiet{background:#fffdf8;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:7px 10px;font-size:13px}
 .tool:hover,.quiet:hover{background:#f2ead8}
+.quiet:disabled{opacity:.55}
 .hero{padding:33px 0 22px;text-align:center}
 h1,h2,p{margin:0}
 h1{font-size:clamp(40px,6vw,66px);font-weight:900;line-height:1.1;letter-spacing:-.078em}
@@ -44,6 +45,10 @@ main[data-phase=running] .hero,main[data-phase=complete] .hero{display:none}
 .state i{flex:none;width:8px;height:8px;border-radius:50%;background:#a67527;box-shadow:0 0 8px #bd8a4680}
 #status{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .counter{font:650 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--gold);white-space:nowrap}
+.drop-control{display:flex;align-items:center;gap:9px;padding:10px 14px;background:#fffaf0;border-bottom:1px solid #e3d9c3}
+#drop-next{flex:1;min-width:0;overflow-wrap:anywhere}
+#drop-next:disabled{opacity:.72}
+#next-name{min-width:0}
 .track{height:2px;background:#efe6d0}
 #progress{display:block;width:100%;height:100%;transform:scaleX(0);transform-origin:left;background:#b28748;transition:transform .25s}
 canvas{display:block;width:100%;height:auto}
@@ -95,7 +100,7 @@ canvas{display:block;width:100%;height:auto}
 .layout[data-phase=complete]{grid-template-columns:1fr}
 .layout[data-phase=complete] .panel{order:-1}
 .layout[data-phase=running],.layout[data-phase=complete]{margin-top:9px}
-.board-head,.board-foot{padding:8px}
+.board-head,.board-foot,.drop-control{padding:8px}
 .board-actions .quiet{padding:5px 6px;font-size:12px}
 .panel{padding:16px}
 .name-field input,#count{font-size:16px}
@@ -121,20 +126,29 @@ canvas{display:block;width:100%;height:auto}
     <div id="layout" class="layout" data-phase="setup">
       <section id="board" class="board" aria-label="구슬판" tabindex="-1">
         <div class="board-head"><div class="state"><i aria-hidden="true"></i><span id="status" role="status">추첨 대기 중</span></div><span id="counter" class="counter">00 / 06</span><div id="board-actions" class="board-actions" hidden><button id="pause" type="button" class="quiet">일시정지</button><button id="edit-running" type="button" class="quiet">명단 수정</button></div></div>
+        <div id="drop-control" class="drop-control" hidden>
+          <button id="drop-next" class="primary" type="button"><span aria-hidden="true">↓</span><span id="next-name"></span></button>
+          <label class="speed">속도 <select id="speed">
+            <option value="0.2">×0.2</option><option value="0.3">×0.3</option><option value="0.4">×0.4</option>
+            <option value="0.5">×0.5</option><option value="0.6">×0.6</option><option value="0.75" selected>×0.75</option>
+            <option value="0.9">×0.9</option><option value="1">×1</option><option value="1.5">×1.5</option>
+            <option value="2">×2</option><option value="4">×4</option>
+          </select></label>
+        </div>
         <div class="track" aria-hidden="true"><span id="progress"></span></div>
         <canvas id="canvas" width="1440" height="1100" aria-hidden="true"></canvas>
-        <div class="board-foot"><span>왼쪽 칸부터 · 같은 칸은 위에서부터</span><label class="speed">속도 <select id="speed"><option value="1">×1</option><option value="2">×2</option><option value="4">×4</option></select></label></div>
+        <div class="board-foot"><span>왼쪽 칸부터 · 같은 칸은 위에서부터</span></div>
       </section>
       <section class="panel" aria-label="참가자와 추첨 결과">
         <form id="setup" novalidate>
           <h2>참가자 등록</h2>
-          <p class="sub">이름을 입력하면 구슬을 떨어뜨릴 차례가 무작위로 정해져요.</p>
+          <p class="sub">이름을 등록한 뒤 추첨 화면에 나온 이름을 한 명씩 눌러 구슬을 떨어뜨려요.</p>
           <div class="form-row"><label for="count">참가 인원</label><input id="count" type="number" min="3" max="20" step="1" value="6" required></div>
           <div class="names-title"><span>참가자 이름</span><button type="button" id="demo" class="link">예시 이름 넣기</button></div>
           <div id="names" class="name-grid"></div>
           <p id="form-error" role="alert" hidden></p>
           <button id="start" class="primary" type="submit"><span aria-hidden="true">▶</span> 추첨 시작</button>
-          <p class="rules setup-rule"><strong>왼쪽 칸부터</strong> 순서를 정하고, 같은 칸은 <strong>위에 쌓인 구슬부터</strong> 읽어요.</p>
+          <p class="rules setup-rule">이름이 뜨는 차례는 무작위예요. 최종 순서는 <strong>왼쪽 칸부터</strong>, 같은 칸은 <strong>위쪽 구슬부터</strong> 읽어요.</p>
         </form>
         <details id="running" hidden>
           <summary>구슬 낙하 순서 보기</summary>
@@ -187,6 +201,7 @@ let time = 0;
 let previousFrame = null;
 let lastPeg = 0;
 let paused = false;
+let dropping = false;
 let audio;
 let sound = false;
 let formCount = 6;
@@ -237,6 +252,7 @@ function phaseTo(next){
   phase = next;
   $('main').dataset.phase = next;
   $('board-actions').hidden = next !== 'running';
+  $('drop-control').hidden = next !== 'running';
   $('layout').dataset.phase = next;
   $('setup').hidden = next !== 'setup';
   $('running').hidden = next !== 'running';
@@ -321,6 +337,29 @@ function setActive(){
   if(bottom > 0) queue.scrollTop += bottom;
 }
 
+function offerNext(){
+  const drop = drops[completed];
+  $('status').textContent = '이름을 눌러 구슬을 떨어뜨려 주세요';
+  $('next-name').textContent = drop.person.name;
+  $('drop-next').setAttribute('aria-label',`${drop.person.name} 구슬 떨어뜨리기`);
+  $('drop-next').disabled = false;
+  $('pause').disabled = true;
+  $('drop-next').focus({preventScroll:true});
+}
+
+function dropNext(){
+  if(phase !== 'running' || dropping || completed === drops.length) return;
+  dropping = true;
+  time = 0;
+  lastPeg = 0;
+  previousFrame = null;
+  $('drop-next').disabled = true;
+  $('pause').disabled = false;
+  setActive();
+  drawBoard(drops[completed],0);
+  frame = requestAnimationFrame(animate);
+}
+
 function startRound(){
   cancelAnimationFrame(frame);
   const plan = planRound(participants);
@@ -334,15 +373,14 @@ function startRound(){
   lastPeg = 0;
   previousFrame = null;
   paused = false;
+  dropping = false;
   $('pause').textContent = '일시정지';
   phaseTo('running');
   buildDropList();
-  setActive();
   updateProgress(0,drops.length);
-  $('board').focus({preventScroll:true});
   window.scrollTo(0,0);
   drawBoard();
-  frame = requestAnimationFrame(animate);
+  offerNext();
 }
 
 function editNames(){
@@ -421,23 +459,22 @@ function position(drop,elapsed){
 }
 
 function animate(now){
-  if(phase !== 'running' || paused) return;
+  if(phase !== 'running' || paused || !dropping) return;
   const speed = Number($('speed').value);
-  const motionMultiplier = reducedMotion.matches ? 3 : 1;
-  time += Math.min(now-(previousFrame ?? now),64)*speed*motionMultiplier;
+  time += Math.min(now-(previousFrame ?? now),64)*speed;
   previousFrame = now;
   if(time >= landingTime && lastPeg !== -1){
     settle(drops[completed]);
     lastPeg = -1;
   }
   if(time >= nextDropTime){
-    if(completed === drops.length){
-      finishRound();
-      return;
+    dropping = false;
+    if(completed === drops.length) finishRound();
+    else {
+      drawBoard();
+      offerNext();
     }
-    time = 0;
-    lastPeg = 0;
-    setActive();
+    return;
   }
   if(lastPeg === -1){
     drawBoard();
@@ -726,7 +763,9 @@ $('setup').addEventListener('submit',event => {
   showError('');
   startRound();
 });
+$('drop-next').addEventListener('click',dropNext);
 $('pause').addEventListener('click',() => {
+  if(!dropping) return;
   paused = !paused;
   $('pause').textContent = paused ? '계속하기' : '일시정지';
   if(paused){
@@ -734,7 +773,7 @@ $('pause').addEventListener('click',() => {
     $('status').textContent = '일시정지';
   } else {
     previousFrame = null;
-    if(lastPeg === -1) $('status').textContent = '다음 구슬 대기 중';
+    if(lastPeg === -1) $('status').textContent = '구슬 착지 완료';
     else setActive();
     frame = requestAnimationFrame(animate);
   }
