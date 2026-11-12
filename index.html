@@ -34,7 +34,7 @@ main[data-phase=running] .hero,main[data-phase=complete] .hero{display:none}
 .layout{display:grid;align-items:start;gap:13px;padding-bottom:28px}
 .layout[data-phase=setup]{max-width:620px;margin:0 auto}
 .layout[data-phase=setup] .board{display:none}
-.layout[data-phase=running]{width:min(850px,100%);margin:16px auto 0}
+.layout[data-phase=running]{width:min(1000px,100%);margin:16px auto 0}
 .layout[data-phase=complete]{grid-template-columns:minmax(0,1.9fr) minmax(272px,1fr);margin-top:16px}
 .board,.panel{min-width:0;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--card)}
 .board{box-shadow:0 12px 42px #78603512}
@@ -136,7 +136,7 @@ canvas{display:block;width:100%;height:auto}
           </select></label>
         </div>
         <div class="track" aria-hidden="true"><span id="progress"></span></div>
-        <canvas id="canvas" width="1440" height="1100" aria-hidden="true"></canvas>
+        <canvas id="canvas" width="1800" height="1200" aria-hidden="true"></canvas>
         <div class="board-foot"><span>왼쪽 칸부터 · 같은 칸은 위에서부터</span></div>
       </section>
       <section class="panel" aria-label="참가자와 추첨 결과">
@@ -178,15 +178,19 @@ backdrop.height = canvas.height;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const colors = ['#dffc85','#78e5ff','#ff9d89','#c9a7ff','#ffcf70','#fba8d9','#75f0b0','#a8baff','#ffac68','#a8e6a6','#f7ef89','#80cffa','#f998b1','#b8a6ee','#ffa0a0','#70ded1','#d2ce8e','#c2d9ff','#e0a5cc','#8bf5ea'];
 const demoNames = ['민지','지훈','서연','현우','하은','도윤','수아','윤서','지우','예린','유진','서준','나연','은호','시우','연우','지민','가은','유나','하준'];
-const width = 720;
+const width = 900;
+const centerX = width / 2;
+const laneWidth = 56;
 const radius = 25;
 const stackPitch = 52;
 let height = 0;
-const rows = 10;
+const rows = 14;
 const laneCount = rows + 1;
-const binTop = 300;
+const boardLeft = (width - laneCount * laneWidth) / 2;
+const boardRight = width - boardLeft;
+const binTop = 388;
 let floorY = 0;
-const laneX = lane => 60 + lane * 60;
+const laneX = lane => boardLeft + (lane + .5) * laneWidth;
 const pad = n => String(n).padStart(2,'0');
 const cryptoWord = new Uint32Array(1);
 const nameValues = Array(20).fill('');
@@ -229,12 +233,12 @@ function planRound(people){
   const stacks = emptyLanes();
   const order = shuffled(people);
   const planned = order.map(person => {
-    const path = [360];
+    const path = [centerX];
     let lane = 0;
     for(let row = 0; row < rows; row++){
       const right = randomInt(2);
       lane += right;
-      path.push(path.at(-1) + (right ? 30 : -30));
+      path.push(path.at(-1) + (right ? 1 : -1) * laneWidth / 2);
     }
     const drop = {person,path,lane,level:stacks[lane].length};
     stacks[lane].push(drop);
@@ -444,7 +448,7 @@ function stackY(level){
 function position(drop,elapsed){
   if(elapsed <= entranceTime){
     const t = Math.max(0,elapsed / entranceTime);
-    return [360,23 + (pegY(0)-radius-27)*t*t];
+    return [centerX,23 + (pegY(0)-radius-27)*t*t];
   }
   if(elapsed < exitTime){
     const row = Math.floor((elapsed - entranceTime) / pegTime);
@@ -508,11 +512,11 @@ function circle(x,y,r,fill){
 
 function drawMarbleName(name,x,y){
   const characters = Array.from(name);
-  const maxWidth = 43;
+  const maxWidth = 44;
   ctx.fillStyle = '#302837';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  for(let size=16;size>=13;size--){
+  for(let size=17;size>=14;size--){
     ctx.font = `800 ${size}px system-ui, sans-serif`;
     if(ctx.measureText(name).width <= maxWidth){
       ctx.fillText(name,x,y+.5);
@@ -572,11 +576,14 @@ function resizeBoard(maxStack){
 
 function drawArch(offset,color){
   ctx.beginPath();
-  ctx.moveTo(30+offset,binTop);
-  ctx.lineTo(30+offset,230);
-  ctx.bezierCurveTo(30+offset,123,198+offset,73,360,24+offset);
-  ctx.bezierCurveTo(522-offset,73,690-offset,123,690-offset,230);
-  ctx.lineTo(690-offset,binTop);
+  const left = boardLeft + offset;
+  const right = boardRight - offset;
+  const shoulderY = binTop * .77;
+  ctx.moveTo(left,binTop);
+  ctx.lineTo(left,shoulderY);
+  ctx.bezierCurveTo(left,binTop*.41,centerX-200+offset,binTop*.24,centerX,24+offset);
+  ctx.bezierCurveTo(centerX+200-offset,binTop*.24,right,binTop*.41,right,shoulderY);
+  ctx.lineTo(right,binTop);
   ctx.lineWidth = 1;
   ctx.strokeStyle = color;
   ctx.stroke();
@@ -590,7 +597,7 @@ function paintBackdrop(){
   background.addColorStop(1,'#faf4e5');
   ctx.fillStyle = background;
   ctx.fillRect(0,0,width,height);
-  const glow = ctx.createRadialGradient(360,28,0,360,62,270);
+  const glow = ctx.createRadialGradient(centerX,28,0,centerX,62,330);
   glow.addColorStop(0,'#fff1bf');
   glow.addColorStop(.5,'#fff6d5ac');
   glow.addColorStop(1,'#fff6d500');
@@ -599,10 +606,10 @@ function paintBackdrop(){
 
   // Translucent panels and tracery echo a chapel window behind the pegs.
   const panels = ['#cfdeef72','#f0deb878','#eee4f36b','#f0deb878','#cfdeef72'];
-  const endpoints = [30,157,282,438,563,690];
+  const endpoints = [0,.19,.38,.62,.81,1].map(fraction => boardLeft + fraction * (boardRight-boardLeft));
   for(let panel=0;panel<panels.length;panel++){
     ctx.beginPath();
-    ctx.moveTo(360,27);
+    ctx.moveTo(centerX,27);
     ctx.lineTo(endpoints[panel],binTop);
     ctx.lineTo(endpoints[panel+1],binTop);
     ctx.closePath();
@@ -611,14 +618,14 @@ function paintBackdrop(){
   }
   drawArch(0,'#b18b4e86');
   drawArch(11,'#b18b4e44');
-  for(const x of endpoints.slice(1,-1)) line(360,27,x,binTop,'#b18b4e42');
-  line(360,7,360,31,'#a87832',1.4);
-  line(352,15,368,15,'#a87832',1.4);
-  line(346,32,374,32,'#ae813b',2);
+  for(const x of endpoints.slice(1,-1)) line(centerX,27,x,binTop,'#b18b4e42');
+  line(centerX,7,centerX,31,'#a87832',1.4);
+  line(centerX-8,15,centerX+8,15,'#a87832',1.4);
+  line(centerX-14,32,centerX+14,32,'#ae813b',2);
 
   for(let row=0;row<rows;row++){
     for(let col=0;col<=row;col++){
-      const x=360+(2*col-row)*30;
+      const x=centerX+(2*col-row)*laneWidth/2;
       const y=pegY(row);
       circle(x,y,4.3,'#fff9e7');
       circle(x,y,2.8,'#8e7346');
@@ -634,16 +641,17 @@ function drawBoard(active,elapsed){
     const x = laneX(lane);
     const occupied = lanes[lane].length > 0;
     ctx.fillStyle = occupied ? '#f2e6cbbd' : lane % 2 ? '#f9f5eaac' : '#edf0f7b8';
-    ctx.fillRect(x-29,binTop,58,floorY-binTop);
-    line(x-30,binTop,x-30,floorY,'#bbac8d');
+    const left = x - laneWidth/2;
+    ctx.fillRect(left+1,binTop,laneWidth-2,floorY-binTop);
+    line(left,binTop,left,floorY,'#bbac8d');
     ctx.fillStyle = occupied ? '#634719' : '#656679';
     ctx.font = '600 15px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(pad(lane+1),x,floorY + 17);
   }
-  line(690,binTop,690,floorY,'#bbac8d');
-  line(30,floorY,690,floorY,'#a2824b',1.4);
+  line(boardRight,binTop,boardRight,floorY,'#bbac8d');
+  line(boardLeft,floorY,boardRight,floorY,'#a2824b',1.4);
 
   lanes.forEach((stack,lane) => {
     stack.forEach((drop,level) => drawMarble(laneX(lane),stackY(level),drop.person));
