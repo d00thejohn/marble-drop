@@ -157,7 +157,7 @@ canvas{display:block;width:100%;height:auto}
           <div id="names" class="name-grid"></div>
           <p id="form-error" role="alert" hidden></p>
           <button id="start" class="primary" type="submit"><span aria-hidden="true">▶</span> 추첨 시작</button>
-          <p class="rules setup-rule">구슬이 들어간 칸은 삼각형 지붕으로 닫히고, 이웃한 지붕은 평행사변형으로 연결돼요. 구슬은 막힌 곳을 지나 <strong>첫 열린 칸</strong>으로 떨어져요. 최종 순서는 <strong>왼쪽부터</strong> 읽어요.</p>
+          <p class="rules setup-rule">구슬이 들어간 칸 위의 핀 세 점이 삼각형으로 연결돼요. 이웃한 삼각형 위에는 평행사변형이 생겨요. 구슬은 막힌 곳을 지나 <strong>첫 열린 칸</strong>으로 떨어져요. 최종 순서는 <strong>왼쪽부터</strong> 읽어요.</p>
         </form>
         <details id="running" hidden>
           <summary>구슬 낙하 순서 보기</summary>
@@ -205,10 +205,15 @@ const binTop = 388;
 const floorY = binTop + 148;
 const height = floorY + 33;
 const restingY = floorY - radius - 1;
-const gateY = binTop + 32;
-const roofY = gateY - 24;
+const firstPegY = 78;
+const pegSpacing = 22;
+const pegY = row => firstPegY + pegSpacing * row;
+const gateY = pegY(rows-1);
+const roofY = pegY(rows-2);
 const bridgeY = roofY - 14;
 const exitY = bridgeY - radius - 10;
+const clearanceRow = rows - 4;
+const pegContactY = row => pegY(row) - radius - 4;
 let viewLeft = 0;
 let viewWidth = width;
 let leftSlot = 0;
@@ -269,9 +274,13 @@ function planRound(people){
       path.push(path.at(-1) + (right ? 1 : -1) * laneWidth / 2);
     }
     const slot = findOpenSlot(lane,taken);
-    const bridged = taken.has(lane-1) || taken.has(lane+1);
+    const bridged = taken.has(lane) && (taken.has(lane-1) || taken.has(lane+1));
+    const lastSteps = path.slice(clearanceRow);
+    const left = Math.min(...lastSteps) - laneWidth;
+    const right = Math.max(...lastSteps) + laneWidth;
+    const nearClosed = [...taken].some(previous => laneX(previous) >= left && laneX(previous) <= right);
     taken.add(slot);
-    return {person,path,lane,slot,bridged};
+    return {person,path,lane,slot,bridged,nearClosed};
   });
 }
 
@@ -484,9 +493,41 @@ const entranceTime = 210;
 const pegTime = 124;
 const exitTime = entranceTime + rows * pegTime;
 const landingTime = exitTime + 390;
-const pegY = row => 78 + 22 * row;
 const rollDuration = drop => drop.slot === drop.lane ? 0 : 260 + 100 * Math.abs(drop.slot-drop.lane);
 const slideY = (from,to,t) => from + (to-from)*t*t;
+
+function approachY(drop,row){
+  if(!drop.nearClosed) return row === rows ? binTop - 7 : pegContactY(row);
+  if(row <= clearanceRow) return pegContactY(row);
+  const t = (row-clearanceRow)/(rows-clearanceRow);
+  return pegContactY(clearanceRow) + (exitY-pegContactY(clearanceRow))*t;
+}
+
+function roofSupportY(x,center){
+  const distance = Math.abs(x-center);
+  const half = laneWidth/2;
+  const slope = (gateY-roofY)/half;
+  const tangent = radius*slope/Math.hypot(1,slope);
+  const contact = Math.max(0,Math.min(half,distance-tangent));
+  const dx = distance-contact;
+  return dx < radius ? roofY+contact*slope-Math.sqrt(radius**2-dx**2) : gateY;
+}
+
+function rollingPosition(drop,progress){
+  const direction = Math.sign(drop.slot-drop.lane);
+  const travel = Math.min(1,progress/.73);
+  const x = laneX(drop.lane + (drop.slot-drop.lane)*travel);
+  if(travel === 1) return [x,slideY(gateY,restingY,(progress-.73)/.27)];
+
+  const lastRoof = laneX(drop.slot-direction);
+  let y = roofSupportY(x,lastRoof);
+  if(drop.bridged){
+    const edge = lastRoof + (direction > 0 ? 17 : -10);
+    const dx = Math.max(0,(x-edge)*direction);
+    if(dx < radius) y = Math.min(y,bridgeY-Math.sqrt(radius**2-dx**2));
+  }
+  return [x,y];
+}
 
 function position(drop,elapsed){
   if(elapsed <= entranceTime){
@@ -496,24 +537,20 @@ function position(drop,elapsed){
   if(elapsed < exitTime){
     const row = Math.floor((elapsed - entranceTime) / pegTime);
     const t = (elapsed - entranceTime - row * pegTime) / pegTime;
-    const start = pegY(row)-radius-4;
-    const end = row === rows - 1 ? exitY : pegY(row+1)-radius-4;
+    const start = approachY(drop,row);
+    const end = approachY(drop,row+1);
     const x = drop.path[row] + (drop.path[row+1]-drop.path[row])*t;
-    return [x,start + (end-start)*t - 8*Math.sin(Math.PI*t)];
+    const bounce = drop.nearClosed && row >= clearanceRow ? 3 : 8;
+    return [x,start + (end-start)*t - bounce*Math.sin(Math.PI*t)];
   }
   const duration = rollDuration(drop);
-  const rollingY = (drop.bridged ? bridgeY : roofY) - radius;
   if(elapsed <= landingTime){
     const t = (elapsed-exitTime)/(landingTime-exitTime);
-    return [laneX(drop.lane),slideY(exitY,duration ? rollingY : restingY,t)];
+    const contactY = (drop.bridged ? bridgeY : roofY) - radius;
+    return [laneX(drop.lane),slideY(approachY(drop,rows),duration ? contactY : restingY,t)];
   }
   if(!duration) return [laneX(drop.slot),restingY];
-
-  const t = Math.min(1,(elapsed-landingTime)/duration);
-  const travel = Math.min(1,t/.7);
-  const x = laneX(drop.lane + (drop.slot-drop.lane)*travel);
-  if(travel < 1) return [x,rollingY-9*Math.sin(Math.PI*travel)];
-  return [x,slideY(rollingY,restingY,(t-.7)/.3)];
+  return rollingPosition(drop,Math.min(1,(elapsed-landingTime)/duration));
 }
 
 function animate(now){
@@ -645,6 +682,12 @@ function drawArch(offset,color){
   ctx.stroke();
 }
 
+function drawPeg(x,y){
+  circle(x,y,4.3,'#fff9e7');
+  circle(x,y,2.8,'#8e7346');
+  circle(x-.55,y-.6,.9,'#f5d899');
+}
+
 function paintBackdrop(){
   ctx.setTransform(2,0,0,2,-viewLeft*2,0);
   const background = ctx.createLinearGradient(0,0,0,height);
@@ -683,9 +726,7 @@ function paintBackdrop(){
     for(let col=0;col<=row;col++){
       const x=centerX+(2*col-row)*laneWidth/2;
       const y=pegY(row);
-      circle(x,y,4.3,'#fff9e7');
-      circle(x,y,2.8,'#8e7346');
-      circle(x-.55,y-.6,.9,'#f5d899');
+      drawPeg(x,y);
     }
   }
   backdrop.getContext('2d').drawImage(canvas,0,0);
@@ -753,7 +794,13 @@ function drawBoard(active,elapsed){
   line(trayLeft,floorY,trayRight,floorY,'#a2824b',1.4);
 
   drawRoofBridges();
-  settledSlots.forEach((drop,slot) => drawMarble(laneX(slot),restingY,drop.person));
+  settledSlots.forEach((drop,slot) => {
+    const x = laneX(slot);
+    drawPeg(x-laneWidth/2,gateY);
+    drawPeg(x+laneWidth/2,gateY);
+    drawPeg(x,roofY);
+    drawMarble(x,restingY,drop.person);
+  });
 
   if(active){
     const color = active.person.color;
