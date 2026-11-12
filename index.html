@@ -45,8 +45,8 @@ main[data-phase=running] .hero,main[data-phase=complete] .hero{display:none}
 .state i{flex:none;width:8px;height:8px;border-radius:50%;background:#a67527;box-shadow:0 0 8px #bd8a4680}
 #status{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .counter{font:650 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--gold);white-space:nowrap}
-.drop-control{display:flex;align-items:center;gap:9px;padding:10px 14px;background:#fffaf0;border-bottom:1px solid #e3d9c3}
-#drop-next{flex:1;min-width:0;overflow-wrap:anywhere}
+.board-stage{position:relative}
+#drop-next{position:absolute;top:14px;right:14px;width:auto;min-width:min(138px,37%);max-width:37%;min-height:44px;padding:8px 13px;overflow-wrap:anywhere;box-shadow:0 3px 9px #78603524}
 #drop-next:disabled{opacity:.72}
 #next-name{min-width:0}
 .track{height:2px;background:#efe6d0}
@@ -100,7 +100,8 @@ canvas{display:block;width:100%;height:auto}
 .layout[data-phase=complete]{grid-template-columns:1fr}
 .layout[data-phase=complete] .panel{order:-1}
 .layout[data-phase=running],.layout[data-phase=complete]{margin-top:9px}
-.board-head,.board-foot,.drop-control{padding:8px}
+.board-head,.board-foot{padding:8px}
+#drop-next{top:8px;right:8px;min-width:min(92px,37%);padding:6px 9px;font-size:14px}
 .board-actions .quiet{padding:5px 6px;font-size:12px}
 .panel{padding:16px}
 .name-field input,#count{font-size:16px}
@@ -126,18 +127,20 @@ canvas{display:block;width:100%;height:auto}
     <div id="layout" class="layout" data-phase="setup">
       <section id="board" class="board" aria-label="구슬판" tabindex="-1">
         <div class="board-head"><div class="state"><i aria-hidden="true"></i><span id="status" role="status">추첨 대기 중</span></div><span id="counter" class="counter">00 / 06</span><div id="board-actions" class="board-actions" hidden><button id="pause" type="button" class="quiet">일시정지</button><button id="edit-running" type="button" class="quiet">명단 수정</button></div></div>
-        <div id="drop-control" class="drop-control" hidden>
-          <button id="drop-next" class="primary" type="button"><span aria-hidden="true">↓</span><span id="next-name"></span></button>
-          <label class="speed">속도 <select id="speed">
+        <div class="track" aria-hidden="true"><span id="progress"></span></div>
+        <div class="board-stage">
+          <canvas id="canvas" width="1800" height="1200" aria-hidden="true"></canvas>
+          <button id="drop-next" class="primary" type="button" hidden><span aria-hidden="true">↓</span><span id="next-name"></span></button>
+        </div>
+        <div class="board-foot">
+          <span>왼쪽 칸부터 · 같은 칸은 위에서부터</span>
+          <label id="speed-control" class="speed" hidden>속도 <select id="speed">
             <option value="0.2">×0.2</option><option value="0.3">×0.3</option><option value="0.4">×0.4</option>
             <option value="0.5">×0.5</option><option value="0.6">×0.6</option><option value="0.75" selected>×0.75</option>
             <option value="0.9">×0.9</option><option value="1">×1</option><option value="1.5">×1.5</option>
             <option value="2">×2</option><option value="4">×4</option>
           </select></label>
         </div>
-        <div class="track" aria-hidden="true"><span id="progress"></span></div>
-        <canvas id="canvas" width="1800" height="1200" aria-hidden="true"></canvas>
-        <div class="board-foot"><span>왼쪽 칸부터 · 같은 칸은 위에서부터</span></div>
       </section>
       <section class="panel" aria-label="참가자와 추첨 결과">
         <form id="setup" novalidate>
@@ -256,7 +259,8 @@ function phaseTo(next){
   phase = next;
   $('main').dataset.phase = next;
   $('board-actions').hidden = next !== 'running';
-  $('drop-control').hidden = next !== 'running';
+  $('drop-next').hidden = next !== 'running';
+  $('speed-control').hidden = next !== 'running';
   $('layout').dataset.phase = next;
   $('setup').hidden = next !== 'setup';
   $('running').hidden = next !== 'running';
