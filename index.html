@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f9f6ee">
-<meta name="description" content="3~20명의 순서를 정하는 구슬 추첨 게임">
+<meta name="description" content="3~10명의 순서를 정하는 구슬 추첨 게임">
 <title>구슬 드롭 — 순서 추첨 게임</title>
 <style>
 :root{color-scheme:light;--bg:#f9f6ee;--card:#fffdf7;--line:#ded5c1;--ink:#282d3c;--muted:#595f70;--gold:#855c21;--accent:#e9cd8b;--blue:#435779;--mono:"IBM Plex Mono",ui-monospace,monospace;--sans:"Instrument Sans","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
@@ -152,7 +152,7 @@ canvas{display:block;width:100%;height:auto}
         <form id="setup" novalidate>
           <h2>참가자 등록</h2>
           <p class="sub">이름을 비워두면 두성을 포함해 ‘성’으로 끝나는 예시 이름이 자동으로 채워져요.</p>
-          <div class="form-row"><label for="count">참가 인원</label><input id="count" type="number" min="3" max="20" step="1" value="6" required></div>
+          <div class="form-row"><label for="count">참가 인원</label><input id="count" type="number" min="3" max="10" step="1" value="6" required></div>
           <div class="names-title"><span>참가자 이름</span><button type="button" id="demo" class="link">예시 이름 넣기</button></div>
           <div id="names" class="name-grid"></div>
           <p id="form-error" role="alert" hidden></p>
@@ -216,7 +216,9 @@ let rightSlot = laneCount - 1;
 const laneX = lane => boardLeft + (lane + .5) * laneWidth;
 const pad = n => String(n).padStart(2,'0');
 const cryptoWord = new Uint32Array(1);
-const nameValues = Array(20).fill('');
+const minParticipants = 3;
+const maxParticipants = 10;
+const nameValues = Array(maxParticipants).fill('');
 let participants = [];
 let drops = [];
 const settledSlots = new Map();
@@ -303,7 +305,7 @@ function addDot(parent,color){
 
 function validCount(){
   const n = $('count').valueAsNumber;
-  return Number.isInteger(n) && n >= 3 && n <= 20;
+  return Number.isInteger(n) && n >= minParticipants && n <= maxParticipants;
 }
 
 function renderFields(n){
@@ -821,7 +823,7 @@ $('setup').addEventListener('submit',event => {
   event.preventDefault();
   if(!validCount()){
     $('count').setAttribute('aria-invalid','true');
-    showError('참가 인원은 3명에서 20명 사이의 정수로 입력해 주세요.');
+    showError('참가 인원은 3명에서 10명 사이의 정수로 입력해 주세요.');
     $('count').focus();
     return;
   }
