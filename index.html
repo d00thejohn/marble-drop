@@ -3,98 +3,104 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#11110f">
+<meta name="theme-color" content="#f9f6ee">
 <meta name="description" content="3~20명의 순서를 정하는 구슬 추첨 게임">
 <title>구슬 드롭 — 순서 추첨 게임</title>
 <style>
-:root{color-scheme:dark;--bg:#11110f;--card:#1b1b18;--line:#35352d;--ink:#f8f4e8;--muted:#b9b6a8;--lime:#defb86;--mono:"IBM Plex Mono",ui-monospace,monospace;--sans:"Instrument Sans","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
+:root{color-scheme:light;--bg:#f9f6ee;--card:#fffdf7;--line:#ded5c1;--ink:#282d3c;--muted:#595f70;--gold:#855c21;--accent:#e9cd8b;--blue:#435779;--mono:"IBM Plex Mono",ui-monospace,monospace;--sans:"Instrument Sans","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans)}
-button,input,select,textarea{font:inherit}
-button,select{cursor:pointer}
+body{margin:0;background:radial-gradient(ellipse at 50% 0,#fffdf5 15%,transparent 60%),var(--bg);color:var(--ink);font:15px/1.55 var(--sans)}
+button,input,select,textarea,summary{font:inherit}
+button,select,summary{cursor:pointer}
 button:disabled,select:disabled,input:disabled{cursor:default}
-button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,section:focus-visible,h2:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
-.shell{width:min(1160px,calc(100% - 56px));margin:auto}
-.top{height:70px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
-.brand{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:850;letter-spacing:.08em}
-.brand-mark{width:34px;height:34px;display:grid;place-items:center;color:#151713;background:var(--lime);border-radius:50%}
-.brand-mark svg{width:20px}
-.tool,.quiet{background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:7px 11px;font-size:13px}
-.tool:hover,.quiet:hover{background:#2a2b23}
-.hero{display:flex;align-items:end;justify-content:space-between;gap:24px;padding:42px 0 28px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,section:focus-visible,h2:focus-visible,summary:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.shell{width:min(1150px,calc(100% - 48px));margin:auto}
+.top{height:61px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:850;letter-spacing:.12em;color:#3b4357}
+.brand-mark{width:33px;height:33px;display:grid;place-items:center;color:#695024;background:#f3e6c6;border:1px solid #dbbf82;border-radius:50%}
+.brand-mark svg{width:19px}
+.tool,.quiet{background:#fffdf8;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:7px 10px;font-size:13px}
+.tool:hover,.quiet:hover{background:#f2ead8}
+.hero{padding:33px 0 22px;text-align:center}
 h1,h2,p{margin:0}
-h1{font-size:clamp(45px,7vw,83px);font-weight:900;line-height:1.04;letter-spacing:-.085em}
-h1 span{color:var(--lime)}
-.hero p{color:var(--muted);font-size:15px;margin-top:12px}
-.rules{font-size:13px;color:var(--muted);border-left:1px solid #4c4c3a;padding:1px 0 1px 14px;min-width:max-content}
-.rules strong{color:var(--ink);font-weight:650}
-.layout{display:grid;grid-template-columns:minmax(0,1.85fr) minmax(285px,1fr);gap:18px;align-items:start;padding-bottom:36px}
-.board,.panel{min-width:0;border:1px solid var(--line);border-radius:16px;overflow:hidden}
-.board{background:#141614}
-.board-head,.board-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;background:#1a1c17}
-.board-head{border-bottom:1px solid #303329}
-.board-foot{border-top:1px solid #303329;color:var(--muted);font-size:12px}
-.state{display:flex;align-items:center;min-width:0;gap:9px;font-weight:700}
-.state i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--lime);box-shadow:0 0 12px #defb8680}
+h1{font-size:clamp(40px,6vw,66px);font-weight:900;line-height:1.1;letter-spacing:-.078em}
+h1 span{color:var(--gold)}
+.hero p{color:var(--muted);font-size:14px;margin-top:8px}
+main[data-phase=running] .hero,main[data-phase=complete] .hero{display:none}
+.rules{font-size:13px;color:var(--muted)}
+.rules strong{color:var(--ink);font-weight:700}
+.layout{display:grid;align-items:start;gap:13px;padding-bottom:28px}
+.layout[data-phase=setup]{max-width:620px;margin:0 auto}
+.layout[data-phase=setup] .board{display:none}
+.layout[data-phase=running]{width:min(850px,100%);margin:16px auto 0}
+.layout[data-phase=complete]{grid-template-columns:minmax(0,1.9fr) minmax(272px,1fr);margin-top:16px}
+.board,.panel{min-width:0;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--card)}
+.board{box-shadow:0 12px 42px #78603512}
+.board-head,.board-foot{display:flex;justify-content:space-between;align-items:center;gap:9px;padding:10px 14px;background:#fffcf3}
+.board-head{border-bottom:1px solid #e3d9c3;flex-wrap:wrap}
+.board-foot{border-top:1px solid #e3d9c3;color:var(--muted);font-size:12px;flex-wrap:wrap}
+.state{display:flex;align-items:center;min-width:0;gap:8px;font-weight:750;flex:1 1 120px}
+.state i{flex:none;width:8px;height:8px;border-radius:50%;background:#a67527;box-shadow:0 0 8px #bd8a4680}
 #status{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.counter{font:600 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--lime);white-space:nowrap}
-.track{height:2px;background:#303329}
-#progress{display:block;width:100%;height:100%;transform:scaleX(0);transform-origin:left;background:var(--lime);transition:transform .25s}
-canvas{display:block;width:100%;height:auto;aspect-ratio:720/550}
-.speed{display:flex;gap:7px;align-items:center;white-space:nowrap}
-.speed select{border:1px solid #414537;color:var(--ink);background:#23261e;border-radius:6px;padding:3px 4px;font:12px var(--mono)}
-.panel{background:var(--card);padding:21px}
-.panel h2{font-size:23px;letter-spacing:-.045em;line-height:1.2}
+.counter{font:650 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--gold);white-space:nowrap}
+.track{height:2px;background:#efe6d0}
+#progress{display:block;width:100%;height:100%;transform:scaleX(0);transform-origin:left;background:#b28748;transition:transform .25s}
+canvas{display:block;width:100%;height:auto}
+.speed,.board-actions{display:flex;gap:7px;align-items:center;white-space:nowrap}
+.speed select{border:1px solid #d1c3a7;color:var(--ink);background:#fffdf8;border-radius:6px;padding:4px;font:12px var(--mono)}
+.panel{padding:22px}
+.layout[data-phase=running] .panel{padding:8px 14px;background:transparent}
+#running summary{font-weight:700;color:var(--blue);padding:5px 0}
+.panel h2{font-size:24px;letter-spacing:-.045em;line-height:1.2}
 .panel p.sub{color:var(--muted);font-size:13px;margin-top:7px}
 .form-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:19px 0 10px}
 .form-row label{font-weight:700}
-#count{width:83px;background:#12130f;border:1px solid #454539;border-radius:8px;padding:7px 9px;color:var(--ink);font-family:var(--mono)}
-.names-title{display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;color:var(--muted);font-size:12px}
-.link{border:0;background:none;color:var(--lime);font-size:12px;padding:4px 0;text-decoration:underline;text-underline-offset:3px}
-.name-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;max-height:265px;overflow:auto;overscroll-behavior:contain;padding:3px}
-.name-field{min-width:0;display:flex;align-items:center;gap:7px;border:1px solid #38392f;background:#151611;border-radius:8px;padding:0 8px}
-.name-field:focus-within{border-color:var(--lime)}
-.name-field input{background:none;color:var(--ink);padding:9px 0;width:100%;min-width:0;border:none;outline:none;font-size:14px}
-.name-field input::placeholder{color:#979685}
-.name-field input[aria-invalid=true]::placeholder{color:#ffb4a1}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--marble);flex:none}
-.primary{display:flex;justify-content:center;align-items:center;gap:9px;width:100%;border:0;background:var(--lime);color:#1b2110;border-radius:9px;padding:11px 12px;font-weight:850}
-.primary:hover{background:#ecffa9}
+#count{width:83px;background:#fffdf8;border:1px solid #d6c8ab;border-radius:8px;padding:7px 9px;color:var(--ink);font-family:var(--mono)}
+.names-title{display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;color:var(--muted);font-size:13px}
+.link{border:0;background:none;color:var(--blue);font-size:13px;padding:4px 0;text-decoration:underline;text-underline-offset:3px}
+.name-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:305px;overflow:auto;overscroll-behavior:contain;padding:3px}
+.name-field{min-width:0;display:flex;align-items:center;gap:8px;border:1px solid #ded5c1;background:#fffcf4;border-radius:8px;padding:0 10px}
+.name-field:focus-within{border-color:var(--blue)}
+.name-field input{background:none;color:var(--ink);padding:10px 0;width:100%;min-width:0;border:none;outline:none;font-size:15px}
+.name-field input::placeholder{color:#676d7a}
+.name-field input[aria-invalid=true]::placeholder{color:#943f35}
+.dot{display:inline-block;width:9px;height:9px;border:1px solid #594b3445;border-radius:50%;background:var(--marble);flex:none}
+.primary{display:flex;justify-content:center;align-items:center;gap:9px;width:100%;border:1px solid #d3b373;background:var(--accent);color:#2d2515;border-radius:9px;padding:11px 12px;font-weight:850}
+.primary:hover{background:#f1dba6}
 .primary:active{transform:translateY(1px)}
 #start{margin-top:16px}
-#form-error{color:#ffb4a1;font-size:13px;margin-top:8px}
+.setup-rule{margin-top:13px;text-align:center}
+#form-error{color:#943f35;font-size:13px;margin-top:8px}
 .round-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.active-name{min-width:0;display:flex;align-items:center;gap:9px;margin-top:16px;background:#272b1f;border:1px solid #454e33;padding:11px;border-radius:8px;color:var(--lime);font-weight:750;overflow-wrap:anywhere}
-.drop-list,.result-list{padding:0;margin:14px 0 0;list-style:none}
-.drop-list{max-height:335px;overflow:auto}
+.drop-list,.result-list{padding:0;margin:11px 0 0;list-style:none}
+.drop-list{max-height:250px;overflow:auto}
 .drop-list li,.result-list li{display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line);padding:8px 0;min-width:0}
 .drop-list li:last-child,.result-list li:last-child{border:0}
 .drop-list li{color:var(--muted);font-size:13px}
 .drop-list small{margin-left:auto;color:var(--muted);white-space:nowrap}
-.rank{display:grid;place-items:center;width:29px;height:27px;flex:none;border-radius:6px;background:#2a2b21;color:var(--muted);font:650 12px var(--mono)}
-.result-list li:first-child .rank{color:#1b2110;background:var(--lime)}
-.result-list li:first-child{color:var(--lime)}
+.rank{display:grid;place-items:center;width:29px;height:27px;flex:none;border-radius:6px;background:#f0eadc;color:var(--muted);font:650 12px var(--mono)}
+.result-list li:first-child .rank{color:#392708;background:var(--accent)}
+.result-list li:first-child{color:#73501d}
 .person{font-weight:700;overflow-wrap:anywhere;min-width:0;flex:1}
 .lane{font:11px var(--mono);color:var(--muted);white-space:nowrap}
 #copy{margin-top:14px}
-#copy-feedback{margin-top:8px;color:var(--lime);font-size:13px}
-#manual-copy{width:100%;margin-top:9px;resize:vertical;background:#151611;border:1px solid #454539;color:var(--ink);border-radius:8px;padding:8px}
+#copy-feedback{margin-top:8px;color:#4e6029;font-size:13px}
+#manual-copy{width:100%;margin-top:9px;resize:vertical;background:#fffcf4;border:1px solid #d6c8ab;color:var(--ink);border-radius:8px;padding:8px}
 @media(max-width:750px){
-.shell{width:calc(100% - 28px)}
-.top{height:57px}
-.hero{padding:23px 0 19px;align-items:start;flex-direction:column;gap:11px}
-.hero p{margin-top:7px;font-size:13px}
-.rules{border:0;padding:0;font-size:12px}
-.layout{display:flex;flex-direction:column;gap:12px}
-.layout>*{width:100%}
-.layout[data-phase=setup] .panel{order:-1}
+.shell{width:calc(100% - 16px)}
+.top{height:49px;padding:0 5px}
+.hero{padding:24px 6px 17px}
+.hero p{margin-top:6px;font-size:13px}
+.layout[data-phase=complete]{grid-template-columns:1fr}
 .layout[data-phase=complete] .panel{order:-1}
-.board-head,.board-foot{padding:10px 11px}
+.layout[data-phase=running],.layout[data-phase=complete]{margin-top:9px}
+.board-head,.board-foot{padding:8px}
+.board-actions .quiet{padding:5px 6px;font-size:12px}
 .panel{padding:16px}
 .name-field input,#count{font-size:16px}
 .name-field input{padding:8px 0}
-.name-grid{max-height:220px}
+.name-grid{max-height:285px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
 </style>
@@ -108,17 +114,16 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:720/550}
     </div>
     <button id="sound" type="button" class="tool" aria-pressed="false">소리 꺼짐</button>
   </header>
-  <main>
+  <main id="main" data-phase="setup">
     <div class="hero">
       <div><h1>구슬 <span>드롭</span></h1><p>구슬이 떨어진 자리로 차례를 정하는 순서 추첨 게임</p></div>
-      <div class="rules"><strong>왼쪽 칸 → 오른쪽 칸</strong><br>같은 칸은 위쪽 구슬부터</div>
     </div>
     <div id="layout" class="layout" data-phase="setup">
       <section id="board" class="board" aria-label="구슬판" tabindex="-1">
-        <div class="board-head"><div class="state"><i aria-hidden="true"></i><span id="status" role="status">추첨 대기 중</span></div><span id="counter" class="counter">00 / 06</span></div>
+        <div class="board-head"><div class="state"><i aria-hidden="true"></i><span id="status" role="status">추첨 대기 중</span></div><span id="counter" class="counter">00 / 06</span><div id="board-actions" class="board-actions" hidden><button id="pause" type="button" class="quiet">일시정지</button><button id="edit-running" type="button" class="quiet">명단 수정</button></div></div>
         <div class="track" aria-hidden="true"><span id="progress"></span></div>
         <canvas id="canvas" width="1440" height="1100" aria-hidden="true"></canvas>
-        <div class="board-foot"><span>왼쪽 칸부터 순서 확정 <span aria-hidden="true">→</span></span><label class="speed">속도 <select id="speed"><option value="1">×1</option><option value="2">×2</option><option value="4">×4</option></select></label></div>
+        <div class="board-foot"><span>왼쪽 칸부터 · 같은 칸은 위에서부터</span><label class="speed">속도 <select id="speed"><option value="1">×1</option><option value="2">×2</option><option value="4">×4</option></select></label></div>
       </section>
       <section class="panel" aria-label="참가자와 추첨 결과">
         <form id="setup" novalidate>
@@ -128,14 +133,13 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:720/550}
           <div class="names-title"><span>참가자 이름</span><button type="button" id="demo" class="link">예시 이름 넣기</button></div>
           <div id="names" class="name-grid"></div>
           <p id="form-error" role="alert" hidden></p>
-          <button id="start" class="primary" type="submit"><span aria-hidden="true">▶</span> 구슬 떨어뜨리기</button>
+          <button id="start" class="primary" type="submit"><span aria-hidden="true">▶</span> 추첨 시작</button>
+          <p class="rules setup-rule"><strong>왼쪽 칸부터</strong> 순서를 정하고, 같은 칸은 <strong>위에 쌓인 구슬부터</strong> 읽어요.</p>
         </form>
-        <div id="running" hidden>
-          <h2>구슬 낙하 순서</h2>
-          <div class="active-name" id="active-name"></div>
+        <details id="running" hidden>
+          <summary>구슬 낙하 순서 보기</summary>
           <ol id="drop-list" class="drop-list" aria-label="구슬을 떨어뜨리는 순서"></ol>
-          <div class="round-tools"><button id="pause" type="button" class="quiet">일시정지</button><button id="edit-running" type="button" class="quiet">명단 수정</button></div>
-        </div>
+        </details>
         <div id="finished" hidden>
           <h2 id="results-title" tabindex="-1">최종 순서</h2>
           <ol id="result-list" class="result-list" aria-label="최종 순서"></ol>
@@ -161,11 +165,13 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const colors = ['#dffc85','#78e5ff','#ff9d89','#c9a7ff','#ffcf70','#fba8d9','#75f0b0','#a8baff','#ffac68','#a8e6a6','#f7ef89','#80cffa','#f998b1','#b8a6ee','#ffa0a0','#70ded1','#d2ce8e','#c2d9ff','#e0a5cc','#8bf5ea'];
 const demoNames = ['민지','지훈','서연','현우','하은','도윤','수아','윤서','지우','예린','유진','서준','나연','은호','시우','연우','지민','가은','유나','하준'];
 const width = 720;
-const height = 550;
+const radius = 25;
+const stackPitch = 52;
+let height = 0;
 const rows = 10;
 const laneCount = rows + 1;
-const floorY = 500;
-const binTop = 350;
+const binTop = 300;
+let floorY = 0;
 const laneX = lane => 60 + lane * 60;
 const pad = n => String(n).padStart(2,'0');
 const cryptoWord = new Uint32Array(1);
@@ -180,7 +186,6 @@ let frame = 0;
 let time = 0;
 let previousFrame = null;
 let lastPeg = 0;
-let radius = 12;
 let paused = false;
 let audio;
 let sound = false;
@@ -221,7 +226,7 @@ function planRound(people){
     return drop;
   });
   const maxStack = Math.max(...stacks.map(stack => stack.length));
-  return {planned,radius:Math.min(12,(floorY - binTop - 8) / (2.13 * maxStack))};
+  return {planned,maxStack};
 }
 
 function rankLanes(stacks){
@@ -230,6 +235,8 @@ function rankLanes(stacks){
 
 function phaseTo(next){
   phase = next;
+  $('main').dataset.phase = next;
+  $('board-actions').hidden = next !== 'running';
   $('layout').dataset.phase = next;
   $('setup').hidden = next !== 'setup';
   $('running').hidden = next !== 'running';
@@ -306,10 +313,6 @@ function buildDropList(){
 
 function setActive(){
   const drop = drops[completed];
-  const active = $('active-name');
-  active.replaceChildren();
-  addDot(active,drop.person.color);
-  active.append(`${drop.person.name} 구슬 낙하 중`);
   $('status').textContent = `${drop.person.name} 구슬 낙하 중`;
   const item = $('drop-list').children[completed];
   item.lastElementChild.textContent = '낙하 중';
@@ -322,7 +325,8 @@ function startRound(){
   cancelAnimationFrame(frame);
   const plan = planRound(participants);
   drops = plan.planned;
-  radius = plan.radius;
+  resizeBoard(plan.maxStack);
+  $('running').open = false;
   lanes = emptyLanes();
   finalOrder = [];
   completed = 0;
@@ -335,7 +339,8 @@ function startRound(){
   buildDropList();
   setActive();
   updateProgress(0,drops.length);
-  $('board').focus();
+  $('board').focus({preventScroll:true});
+  window.scrollTo(0,0);
   drawBoard();
   frame = requestAnimationFrame(animate);
 }
@@ -345,10 +350,8 @@ function editNames(){
   phaseTo('setup');
   lanes = emptyLanes();
   finalOrder = [];
-  radius = 12;
   $('status').textContent = '추첨 대기 중';
   updateProgress(0,formCount);
-  drawBoard();
   $('count').focus();
 }
 
@@ -394,16 +397,16 @@ const pegTime = 124;
 const exitTime = entranceTime + rows * pegTime;
 const landingTime = exitTime + 390;
 const nextDropTime = landingTime + 210;
-const pegY = row => 92 + 25 * row;
+const pegY = row => 78 + 22 * row;
 
 function stackY(level){
-  return floorY - radius - level * radius * 2.13 - 1;
+  return floorY - radius - level * stackPitch - 1;
 }
 
 function position(drop,elapsed){
   if(elapsed <= entranceTime){
     const t = Math.max(0,elapsed / entranceTime);
-    return [360,33 + (pegY(0)-radius-37)*t*t];
+    return [360,23 + (pegY(0)-radius-27)*t*t];
   }
   if(elapsed < exitTime){
     const row = Math.floor((elapsed - entranceTime) / pegTime);
@@ -466,55 +469,125 @@ function circle(x,y,r,fill){
   ctx.fill();
 }
 
-function drawMarble(x,y,color,r,rank){
-  ctx.save();
-  ctx.shadowBlur = 13;
-  ctx.shadowColor = color;
-  circle(x,y,r,color);
-  ctx.shadowBlur = 0;
-  const sheen = ctx.createRadialGradient(x-r*.35,y-r*.45,0,x,y,r);
-  sheen.addColorStop(0,'#ffffffb0');
-  sheen.addColorStop(.55,'#ffffff16');
-  sheen.addColorStop(1,'#090c004d');
-  circle(x,y,r,sheen);
-  if(rank && r >= 5){
-    ctx.fillStyle = '#191b14';
-    ctx.font = `800 ${Math.min(12,r*1.12)}px system-ui`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(rank,x,y+.5);
+function drawMarbleName(name,x,y){
+  const characters = Array.from(name);
+  const maxWidth = 43;
+  ctx.fillStyle = '#302837';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for(let size=16;size>=13;size--){
+    ctx.font = `800 ${size}px system-ui, sans-serif`;
+    if(ctx.measureText(name).width <= maxWidth){
+      ctx.fillText(name,x,y+.5);
+      return;
+    }
   }
+  ctx.font = '800 14px system-ui, sans-serif';
+  const measure = value => ctx.measureText(value).width;
+  for(let split=Math.ceil(characters.length/2);split>0;split--){
+    const upper = characters.slice(0,split).join('').trim();
+    const lower = characters.slice(split).join('').trim();
+    if(measure(upper) <= maxWidth && measure(lower) <= maxWidth){
+      ctx.fillText(upper,x,y-7);
+      ctx.fillText(lower,x,y+7);
+      return;
+    }
+  }
+  let split = 1;
+  while(split < characters.length && measure(characters.slice(0,split+1).join('')) <= maxWidth) split++;
+  const upper = characters.slice(0,split).join('');
+  let lower = '';
+  for(const character of characters.slice(split)){
+    if(measure(lower+character+'…') > maxWidth) break;
+    lower += character;
+  }
+  ctx.fillText(upper,x,y-7);
+  ctx.fillText(lower.trimEnd()+'…',x,y+7);
+}
+
+function drawMarble(x,y,person){
+  ctx.save();
+  ctx.shadowBlur = 9;
+  ctx.shadowOffsetY = 2;
+  ctx.shadowColor = '#69502b45';
+  circle(x,y,radius,person.color);
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  const sheen = ctx.createRadialGradient(x-radius*.4,y-radius*.46,0,x,y,radius);
+  sheen.addColorStop(0,'#fffffff4');
+  sheen.addColorStop(.63,'#ffffff43');
+  sheen.addColorStop(1,'#44325926');
+  circle(x,y,radius,sheen);
+  ctx.strokeStyle = '#6f573d72';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  drawMarbleName(person.name,x,y);
   ctx.restore();
+}
+
+function resizeBoard(maxStack){
+  floorY = binTop + Math.max(148, maxStack * stackPitch + 8);
+  height = floorY + 33;
+  canvas.width = backdrop.width = width * 2;
+  canvas.height = backdrop.height = height * 2;
+  paintBackdrop();
+}
+
+function drawArch(offset,color){
+  ctx.beginPath();
+  ctx.moveTo(30+offset,binTop);
+  ctx.lineTo(30+offset,230);
+  ctx.bezierCurveTo(30+offset,123,198+offset,73,360,24+offset);
+  ctx.bezierCurveTo(522-offset,73,690-offset,123,690-offset,230);
+  ctx.lineTo(690-offset,binTop);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = color;
+  ctx.stroke();
 }
 
 function paintBackdrop(){
   ctx.setTransform(2,0,0,2,0,0);
-  const background = ctx.createRadialGradient(360,176,5,360,196,390);
-  background.addColorStop(0,'#23291d');
-  background.addColorStop(1,'#10130f');
+  const background = ctx.createLinearGradient(0,0,0,height);
+  background.addColorStop(0,'#fff9e9');
+  background.addColorStop(.54,'#f0f1f5');
+  background.addColorStop(1,'#faf4e5');
   ctx.fillStyle = background;
   ctx.fillRect(0,0,width,height);
+  const glow = ctx.createRadialGradient(360,28,0,360,62,270);
+  glow.addColorStop(0,'#fff1bf');
+  glow.addColorStop(.5,'#fff6d5ac');
+  glow.addColorStop(1,'#fff6d500');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0,0,width,binTop);
 
-  for(let x=30;x<=690;x+=30){
-    for(let y=17;y<floorY;y+=25) circle(x,y,.75,'#31362a');
+  // Translucent panels and tracery echo a chapel window behind the pegs.
+  const panels = ['#cfdeef72','#f0deb878','#eee4f36b','#f0deb878','#cfdeef72'];
+  const endpoints = [30,157,282,438,563,690];
+  for(let panel=0;panel<panels.length;panel++){
+    ctx.beginPath();
+    ctx.moveTo(360,27);
+    ctx.lineTo(endpoints[panel],binTop);
+    ctx.lineTo(endpoints[panel+1],binTop);
+    ctx.closePath();
+    ctx.fillStyle = panels[panel];
+    ctx.fill();
   }
-  line(334,18,349,31,'#626b50');
-  line(386,18,371,31,'#626b50');
-  ctx.fillStyle='#dffc85';
-  ctx.fillRect(349,29,22,3);
-  line(349,37,30,binTop,'#454e3c');
-  line(371,37,690,binTop,'#454e3c');
+  drawArch(0,'#b18b4e86');
+  drawArch(11,'#b18b4e44');
+  for(const x of endpoints.slice(1,-1)) line(360,27,x,binTop,'#b18b4e42');
+  line(360,7,360,31,'#a87832',1.4);
+  line(352,15,368,15,'#a87832',1.4);
+  line(346,32,374,32,'#ae813b',2);
 
   for(let row=0;row<rows;row++){
     for(let col=0;col<=row;col++){
       const x=360+(2*col-row)*30;
       const y=pegY(row);
-      circle(x,y,4.5,'#10130f');
-      circle(x,y,2.7,'#929c7d');
-      circle(x-.6,y-.7,1,'#d6ddbb');
+      circle(x,y,4.3,'#fff9e7');
+      circle(x,y,2.8,'#8e7346');
+      circle(x-.55,y-.6,.9,'#f5d899');
     }
   }
-
   backdrop.getContext('2d').drawImage(canvas,0,0);
 }
 
@@ -523,21 +596,20 @@ function drawBoard(active,elapsed){
   for(let lane=0;lane<laneCount;lane++){
     const x = laneX(lane);
     const occupied = lanes[lane].length > 0;
-    ctx.fillStyle = occupied ? '#252a20' : lane % 2 ? '#161a14' : '#181c16';
+    ctx.fillStyle = occupied ? '#f2e6cbbd' : lane % 2 ? '#f9f5eaac' : '#edf0f7b8';
     ctx.fillRect(x-29,binTop,58,floorY-binTop);
-    line(x-30,binTop,x-30,floorY,'#4b5540');
-    ctx.fillStyle = occupied ? '#e6ecce' : '#a2aa92';
+    line(x-30,binTop,x-30,floorY,'#bbac8d');
+    ctx.fillStyle = occupied ? '#634719' : '#656679';
     ctx.font = '600 15px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(pad(lane+1),x,524);
+    ctx.fillText(pad(lane+1),x,floorY + 17);
   }
-  line(690,binTop,690,floorY,'#4b5540');
-  line(30,floorY,690,floorY,'#798468',1.4);
+  line(690,binTop,690,floorY,'#bbac8d');
+  line(30,floorY,690,floorY,'#a2824b',1.4);
 
-  const ranks = new Map(finalOrder.map((drop,index) => [drop,index+1]));
   lanes.forEach((stack,lane) => {
-    stack.forEach((drop,level) => drawMarble(laneX(lane),stackY(level),drop.person.color,radius,ranks.get(drop)));
+    stack.forEach((drop,level) => drawMarble(laneX(lane),stackY(level),drop.person));
   });
 
   if(active){
@@ -551,14 +623,14 @@ function drawBoard(active,elapsed){
       for(let t=trailStart+16;t<elapsed;t+=16){
         const [nextX,nextY] = position(active,t);
         ctx.globalAlpha = .15 + .7*(1-(elapsed-t)/510);
-        line(x,y,nextX,nextY,color,2.4);
+        line(x,y,nextX,nextY,color,3.6);
         x = nextX;
         y = nextY;
       }
       ctx.restore();
     }
     const [x,y] = position(active,elapsed);
-    drawMarble(x,y,color,radius);
+    drawMarble(x,y,active.person);
   }
 }
 
@@ -673,8 +745,6 @@ $('replay').addEventListener('click',startRound);
 $('sound').addEventListener('click',toggleSound);
 $('copy').addEventListener('click',copyNames);
 renderFields(formCount);
-paintBackdrop();
-drawBoard();
 </script>
 </body>
 </html>
