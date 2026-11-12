@@ -157,7 +157,7 @@ canvas{display:block;width:100%;height:auto}
           <div id="names" class="name-grid"></div>
           <p id="form-error" role="alert" hidden></p>
           <button id="start" class="primary" type="submit"><span aria-hidden="true">▶</span> 추첨 시작</button>
-          <p class="rules setup-rule">구슬이 들어간 칸 위의 핀 세 점이 삼각형으로 연결돼요. 이웃한 삼각형 위에는 평행사변형이 생겨요. 구슬은 막힌 곳을 지나 <strong>첫 열린 칸</strong>으로 떨어져요. 최종 순서는 <strong>왼쪽부터</strong> 읽어요.</p>
+          <p class="rules setup-rule">막힌 칸이 이어지면 위쪽 핀까지 연결해 하나의 큰 삼각형을 만들어요. 구슬은 막힌 곳을 지나 <strong>첫 열린 칸</strong>으로 떨어져요. 최종 순서는 <strong>왼쪽부터</strong> 읽어요.</p>
         </form>
         <details id="running" hidden>
           <summary>구슬 낙하 순서 보기</summary>
@@ -209,10 +209,7 @@ const firstPegY = 78;
 const pegSpacing = 22;
 const pegY = row => firstPegY + pegSpacing * row;
 const gateY = pegY(rows-1);
-const roofY = pegY(rows-2);
-const bridgeY = roofY - 14;
-const exitY = bridgeY - radius - 10;
-const clearanceRow = rows - 4;
+const exitY = gateY - 11;
 const pegContactY = row => pegY(row) - radius - 4;
 let viewLeft = 0;
 let viewWidth = width;
@@ -255,12 +252,19 @@ function shuffled(list){
   return result;
 }
 
-function findOpenSlot(lane,taken){
-  if(!taken.has(lane)) return lane;
-  const direction = randomInt(2) ? 1 : -1;
-  let slot = lane + direction;
-  while(taken.has(slot)) slot += direction;
-  return slot;
+function closedTriangles(slots){
+  const sorted = [...slots].sort((a,b) => a-b);
+  const triangles = [];
+  for(let index=0;index<sorted.length;index++){
+    const first = sorted[index];
+    while(sorted[index+1] === sorted[index]+1) index++;
+    const last = sorted[index];
+    const count = last-first+1;
+    const left = laneX(first)-laneWidth/2;
+    const right = laneX(last)+laneWidth/2;
+    triangles.push({first,last,left,right,count,center:(left+right)/2,apexY:gateY-count*pegSpacing});
+  }
+  return triangles;
 }
 
 function planRound(people){
@@ -268,19 +272,20 @@ function planRound(people){
   return shuffled(people).map(person => {
     const path = [centerX];
     let lane = 0;
-    for(let row = 0; row < rows; row++){
+    for(let row=0;row<rows;row++){
       const right = randomInt(2);
       lane += right;
-      path.push(path.at(-1) + (right ? 1 : -1) * laneWidth / 2);
+      path.push(path.at(-1) + (right ? 1 : -1)*laneWidth/2);
     }
-    const slot = findOpenSlot(lane,taken);
-    const bridged = taken.has(lane) && (taken.has(lane-1) || taken.has(lane+1));
-    const lastSteps = path.slice(clearanceRow);
-    const left = Math.min(...lastSteps) - laneWidth;
-    const right = Math.max(...lastSteps) + laneWidth;
-    const nearClosed = [...taken].some(previous => laneX(previous) >= left && laneX(previous) <= right);
+    const contact = findRoofContact(path,lane,closedTriangles(taken));
+    let slot = lane;
+    if(contact){
+      const {triangle,x} = contact;
+      const direction = Math.sign(x-triangle.center) || (randomInt(2) ? 1 : -1);
+      slot = direction < 0 ? triangle.first-1 : triangle.last+1;
+    }
     taken.add(slot);
-    return {person,path,lane,slot,bridged,nearClosed};
+    return {person,path,lane,slot,contact};
   });
 }
 
@@ -493,64 +498,76 @@ const entranceTime = 210;
 const pegTime = 124;
 const exitTime = entranceTime + rows * pegTime;
 const landingTime = exitTime + 390;
-const rollDuration = drop => drop.slot === drop.lane ? 0 : 260 + 100 * Math.abs(drop.slot-drop.lane);
 const slideY = (from,to,t) => from + (to-from)*t*t;
 
-function approachY(drop,row){
-  if(!drop.nearClosed) return row === rows ? binTop - 7 : pegContactY(row);
-  if(row <= clearanceRow) return pegContactY(row);
-  const t = (row-clearanceRow)/(rows-clearanceRow);
-  return pegContactY(clearanceRow) + (exitY-pegContactY(clearanceRow))*t;
+function unobstructedPosition(path,lane,elapsed){
+  if(elapsed <= entranceTime){
+    const t = Math.max(0,elapsed/entranceTime);
+    return [centerX,slideY(23,pegContactY(0),t)];
+  }
+  if(elapsed < exitTime){
+    const row = Math.floor((elapsed-entranceTime)/pegTime);
+    const t = (elapsed-entranceTime-row*pegTime)/pegTime;
+    const start = pegContactY(row);
+    const end = row === rows-1 ? exitY : pegContactY(row+1);
+    return [path[row]+(path[row+1]-path[row])*t,start+(end-start)*t-8*Math.sin(Math.PI*t)];
+  }
+  const t = (elapsed-exitTime)/(landingTime-exitTime);
+  return [laneX(lane),slideY(exitY,restingY,t)];
 }
 
-function roofSupportY(x,center){
-  const distance = Math.abs(x-center);
-  const half = laneWidth/2;
-  const slope = (gateY-roofY)/half;
+function roofSupportY(x,triangle){
+  const distance = Math.abs(x-triangle.center);
+  const half = (triangle.right-triangle.left)/2;
+  const slope = (gateY-triangle.apexY)/half;
   const tangent = radius*slope/Math.hypot(1,slope);
   const contact = Math.max(0,Math.min(half,distance-tangent));
   const dx = distance-contact;
-  return dx < radius ? roofY+contact*slope-Math.sqrt(radius**2-dx**2) : gateY;
+  return dx <= radius ? triangle.apexY+contact*slope-Math.sqrt(Math.max(0,radius**2-dx**2)) : Infinity;
 }
 
-function rollingPosition(drop,progress){
-  const direction = Math.sign(drop.slot-drop.lane);
-  const travel = Math.min(1,progress/.73);
-  const x = laneX(drop.lane + (drop.slot-drop.lane)*travel);
-  if(travel === 1) return [x,slideY(gateY,restingY,(progress-.73)/.27)];
+function roofAt(x,y,triangles){
+  return triangles.find(triangle => y >= roofSupportY(x,triangle));
+}
 
-  const lastRoof = laneX(drop.slot-direction);
-  let y = roofSupportY(x,lastRoof);
-  if(drop.bridged){
-    const edge = lastRoof + (direction > 0 ? 17 : -10);
-    const dx = Math.max(0,(x-edge)*direction);
-    if(dx < radius) y = Math.min(y,bridgeY-Math.sqrt(radius**2-dx**2));
+function findRoofContact(path,lane,triangles){
+  if(!triangles.length) return null;
+  const step = 5;
+  for(let sample=step;sample<=landingTime+step;sample+=step){
+    let high = Math.min(sample,landingTime);
+    let low = sample-step;
+    const [x,y] = unobstructedPosition(path,lane,high);
+    if(!roofAt(x,y,triangles)) continue;
+    // Refine the first contact so the falling and rolling paths meet on the edge.
+    for(let iteration=0;iteration<14;iteration++){
+      const middle = (low+high)/2;
+      const [mx,my] = unobstructedPosition(path,lane,middle);
+      if(roofAt(mx,my,triangles)) high = middle;
+      else low = middle;
+    }
+    const [hitX,hitY] = unobstructedPosition(path,lane,high);
+    return {time:high,x:hitX,triangle:roofAt(hitX,hitY,triangles)};
   }
-  return [x,y];
+  return null;
+}
+
+function rollDuration(drop){
+  return 300+3*Math.abs(laneX(drop.slot)-drop.contact.x);
+}
+
+function endTime(drop){
+  return drop.contact ? drop.contact.time+rollDuration(drop) : landingTime;
 }
 
 function position(drop,elapsed){
-  if(elapsed <= entranceTime){
-    const t = Math.max(0,elapsed / entranceTime);
-    return [centerX,23 + (pegY(0)-radius-27)*t*t];
-  }
-  if(elapsed < exitTime){
-    const row = Math.floor((elapsed - entranceTime) / pegTime);
-    const t = (elapsed - entranceTime - row * pegTime) / pegTime;
-    const start = approachY(drop,row);
-    const end = approachY(drop,row+1);
-    const x = drop.path[row] + (drop.path[row+1]-drop.path[row])*t;
-    const bounce = drop.nearClosed && row >= clearanceRow ? 3 : 8;
-    return [x,start + (end-start)*t - bounce*Math.sin(Math.PI*t)];
-  }
-  const duration = rollDuration(drop);
-  if(elapsed <= landingTime){
-    const t = (elapsed-exitTime)/(landingTime-exitTime);
-    const contactY = (drop.bridged ? bridgeY : roofY) - radius;
-    return [laneX(drop.lane),slideY(approachY(drop,rows),duration ? contactY : restingY,t)];
-  }
-  if(!duration) return [laneX(drop.slot),restingY];
-  return rollingPosition(drop,Math.min(1,(elapsed-landingTime)/duration));
+  const {contact,path,lane,slot} = drop;
+  if(!contact || elapsed < contact.time) return unobstructedPosition(path,lane,elapsed);
+  const progress = Math.min(1,(elapsed-contact.time)/rollDuration(drop));
+  const travel = Math.min(1,progress/.73);
+  const target = laneX(slot);
+  if(travel === 1) return [target,slideY(gateY,restingY,(progress-.73)/.27)];
+  const x = contact.x+(target-contact.x)*travel*(.55+.45*travel);
+  return [x,Math.min(gateY,roofSupportY(x,contact.triangle))];
 }
 
 function animate(now){
@@ -559,8 +576,7 @@ function animate(now){
   time += Math.min(now-(previousFrame ?? now),64)*speed;
   previousFrame = now;
   const drop = drops[completed];
-  const duration = rollDuration(drop);
-  if(time >= landingTime + duration){
+  if(time >= endTime(drop)){
     settle(drop);
     dropping = false;
     if(completed === drops.length) finishRound();
@@ -570,12 +586,12 @@ function animate(now){
     }
     return;
   }
-  if(time >= landingTime){
-    const direction = drop.slot < drop.lane ? '왼쪽' : '오른쪽';
+  if(drop.contact && time >= drop.contact.time){
+    const direction = laneX(drop.slot) < drop.contact.x ? '왼쪽' : '오른쪽';
     const status = `${drop.person.name} 구슬이 ${direction} 빈칸으로 이동 중`;
     if($('status').textContent !== status) $('status').textContent = status;
   }
-  const hit = Math.max(0,Math.min(rows,1+Math.floor((time-entranceTime)/pegTime)));
+  const hit = Math.max(0,Math.min(rows,1+Math.floor(((drop.contact ? Math.min(time,drop.contact.time) : time)-entranceTime)/pegTime)));
   if(hit > lastPeg){
     lastPeg = hit;
     playTone(530 + hit * 42,.055,'triangle');
@@ -732,29 +748,26 @@ function paintBackdrop(){
   backdrop.getContext('2d').drawImage(canvas,0,0);
 }
 
-function drawRoofBridges(){
-  for(let first=leftSlot;first<rightSlot;first++){
-    if(!settledSlots.has(first) || !settledSlots.has(first+1)) continue;
-    let last = first+1;
-    while(settledSlots.has(last+1)) last++;
-
-    const left = laneX(first);
-    const right = laneX(last);
-    ctx.fillStyle = '#e9d2a5';
-    ctx.fillRect(left,roofY,right-left,gateY-roofY);
-
+function drawClosedTriangles(){
+  for(const triangle of closedTriangles(settledSlots.keys())){
+    const {left,right,center,apexY,count} = triangle;
     ctx.beginPath();
-    ctx.moveTo(left-10,roofY);
-    ctx.lineTo(right+10,roofY);
-    ctx.lineTo(right+17,bridgeY);
-    ctx.lineTo(left-3,bridgeY);
+    ctx.moveTo(left,gateY);
+    ctx.lineTo(center,apexY);
+    ctx.lineTo(right,gateY);
     ctx.closePath();
-    ctx.fillStyle = '#d8b97e';
+    ctx.fillStyle = '#e9d2a5';
     ctx.fill();
     ctx.strokeStyle = '#99723c';
     ctx.lineWidth = 2.2;
+    ctx.lineJoin = 'round';
     ctx.stroke();
-    first = last;
+    for(let step=0;step<count;step++){
+      drawPeg(left+step*laneWidth,gateY);
+      drawPeg(left+step*laneWidth/2,gateY-step*pegSpacing);
+      drawPeg(right-step*laneWidth/2,gateY-step*pegSpacing);
+    }
+    drawPeg(center,apexY);
   }
 }
 
@@ -769,19 +782,6 @@ function drawBoard(active,elapsed){
     const left = x - laneWidth/2;
     ctx.fillRect(left+1,top,laneWidth-2,floorY-top);
     line(left,top,left,floorY,'#bbac8d');
-    if(occupied){
-      ctx.beginPath();
-      ctx.moveTo(left,gateY);
-      ctx.lineTo(x,roofY);
-      ctx.lineTo(left+laneWidth,gateY);
-      ctx.closePath();
-      ctx.fillStyle = '#e9d2a5';
-      ctx.fill();
-      ctx.strokeStyle = '#99723c';
-      ctx.lineWidth = 2.2;
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-    }
     ctx.fillStyle = occupied ? '#634719' : '#656679';
     ctx.font = '600 15px monospace';
     ctx.textAlign = 'center';
@@ -793,14 +793,8 @@ function drawBoard(active,elapsed){
   line(trayRight,rightSlot >= laneCount ? gateY : binTop,trayRight,floorY,'#bbac8d');
   line(trayLeft,floorY,trayRight,floorY,'#a2824b',1.4);
 
-  drawRoofBridges();
-  settledSlots.forEach((drop,slot) => {
-    const x = laneX(slot);
-    drawPeg(x-laneWidth/2,gateY);
-    drawPeg(x+laneWidth/2,gateY);
-    drawPeg(x,roofY);
-    drawMarble(x,restingY,drop.person);
-  });
+  drawClosedTriangles();
+  settledSlots.forEach((drop,slot) => drawMarble(laneX(slot),restingY,drop.person));
 
   if(active){
     const color = active.person.color;
