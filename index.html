@@ -157,7 +157,7 @@ canvas{display:block;width:100%;height:auto}
           <div id="names" class="name-grid"></div>
           <p id="form-error" role="alert" hidden></p>
           <button id="start" class="primary" type="submit"><span aria-hidden="true">▶</span> 추첨 시작</button>
-          <p class="rules setup-rule">막힌 칸이 이어지면 위쪽 핀까지 연결해 하나의 큰 삼각형을 만들어요. 구슬은 막힌 곳을 지나 <strong>첫 열린 칸</strong>으로 떨어져요. 최종 순서는 <strong>왼쪽부터</strong> 읽어요.</p>
+          <p class="rules setup-rule">같은 칸에 떨어진 구슬은 한쪽으로 굴러가 <strong>첫 빈칸</strong>에 멈춰요. 최종 순서는 <strong>왼쪽부터</strong> 읽어요.</p>
         </form>
         <details id="running" hidden>
           <summary>구슬 낙하 순서 보기</summary>
@@ -205,12 +205,7 @@ const binTop = 388;
 const floorY = binTop + 148;
 const height = floorY + 33;
 const restingY = floorY - radius - 1;
-const firstPegY = 78;
-const pegSpacing = 22;
-const pegY = row => firstPegY + pegSpacing * row;
-const gateY = pegY(rows-1);
-const exitY = gateY - 11;
-const pegContactY = row => pegY(row) - radius - 4;
+const rollingY = restingY - 2 * radius;
 let viewLeft = 0;
 let viewWidth = width;
 let leftSlot = 0;
@@ -252,19 +247,12 @@ function shuffled(list){
   return result;
 }
 
-function closedTriangles(slots){
-  const sorted = [...slots].sort((a,b) => a-b);
-  const triangles = [];
-  for(let index=0;index<sorted.length;index++){
-    const first = sorted[index];
-    while(sorted[index+1] === sorted[index]+1) index++;
-    const last = sorted[index];
-    const count = last-first+1;
-    const left = laneX(first)-laneWidth/2;
-    const right = laneX(last)+laneWidth/2;
-    triangles.push({first,last,left,right,count,center:(left+right)/2,apexY:gateY-count*pegSpacing});
-  }
-  return triangles;
+function findOpenSlot(lane,taken){
+  if(!taken.has(lane)) return lane;
+  const direction = randomInt(2) ? 1 : -1;
+  let slot = lane + direction;
+  while(taken.has(slot)) slot += direction;
+  return slot;
 }
 
 function planRound(people){
@@ -272,20 +260,14 @@ function planRound(people){
   return shuffled(people).map(person => {
     const path = [centerX];
     let lane = 0;
-    for(let row=0;row<rows;row++){
+    for(let row = 0; row < rows; row++){
       const right = randomInt(2);
       lane += right;
-      path.push(path.at(-1) + (right ? 1 : -1)*laneWidth/2);
+      path.push(path.at(-1) + (right ? 1 : -1) * laneWidth / 2);
     }
-    const contact = findRoofContact(path,lane,closedTriangles(taken));
-    let slot = lane;
-    if(contact){
-      const {triangle,x} = contact;
-      const direction = Math.sign(x-triangle.center) || (randomInt(2) ? 1 : -1);
-      slot = direction < 0 ? triangle.first-1 : triangle.last+1;
-    }
+    const slot = findOpenSlot(lane,taken);
     taken.add(slot);
-    return {person,path,lane,slot,contact};
+    return {person,path,lane,slot};
   });
 }
 
@@ -498,76 +480,35 @@ const entranceTime = 210;
 const pegTime = 124;
 const exitTime = entranceTime + rows * pegTime;
 const landingTime = exitTime + 390;
+const pegY = row => 78 + 22 * row;
+const rollDuration = drop => drop.slot === drop.lane ? 0 : 160 + 100 * Math.abs(drop.slot-drop.lane);
 const slideY = (from,to,t) => from + (to-from)*t*t;
 
-function unobstructedPosition(path,lane,elapsed){
+function position(drop,elapsed){
   if(elapsed <= entranceTime){
-    const t = Math.max(0,elapsed/entranceTime);
-    return [centerX,slideY(23,pegContactY(0),t)];
+    const t = Math.max(0,elapsed / entranceTime);
+    return [centerX,23 + (pegY(0)-radius-27)*t*t];
   }
   if(elapsed < exitTime){
-    const row = Math.floor((elapsed-entranceTime)/pegTime);
-    const t = (elapsed-entranceTime-row*pegTime)/pegTime;
-    const start = pegContactY(row);
-    const end = row === rows-1 ? exitY : pegContactY(row+1);
-    return [path[row]+(path[row+1]-path[row])*t,start+(end-start)*t-8*Math.sin(Math.PI*t)];
+    const row = Math.floor((elapsed - entranceTime) / pegTime);
+    const t = (elapsed - entranceTime - row * pegTime) / pegTime;
+    const start = pegY(row)-radius-4;
+    const end = row === rows - 1 ? binTop - 7 : pegY(row+1)-radius-4;
+    const x = drop.path[row] + (drop.path[row+1]-drop.path[row])*t;
+    return [x,start + (end-start)*t - 8*Math.sin(Math.PI*t)];
   }
-  const t = (elapsed-exitTime)/(landingTime-exitTime);
-  return [laneX(lane),slideY(exitY,restingY,t)];
-}
-
-function roofSupportY(x,triangle){
-  const distance = Math.abs(x-triangle.center);
-  const half = (triangle.right-triangle.left)/2;
-  const slope = (gateY-triangle.apexY)/half;
-  const tangent = radius*slope/Math.hypot(1,slope);
-  const contact = Math.max(0,Math.min(half,distance-tangent));
-  const dx = distance-contact;
-  return dx <= radius ? triangle.apexY+contact*slope-Math.sqrt(Math.max(0,radius**2-dx**2)) : Infinity;
-}
-
-function roofAt(x,y,triangles){
-  return triangles.find(triangle => y >= roofSupportY(x,triangle));
-}
-
-function findRoofContact(path,lane,triangles){
-  if(!triangles.length) return null;
-  const step = 5;
-  for(let sample=step;sample<=landingTime+step;sample+=step){
-    let high = Math.min(sample,landingTime);
-    let low = sample-step;
-    const [x,y] = unobstructedPosition(path,lane,high);
-    if(!roofAt(x,y,triangles)) continue;
-    // Refine the first contact so the falling and rolling paths meet on the edge.
-    for(let iteration=0;iteration<14;iteration++){
-      const middle = (low+high)/2;
-      const [mx,my] = unobstructedPosition(path,lane,middle);
-      if(roofAt(mx,my,triangles)) high = middle;
-      else low = middle;
-    }
-    const [hitX,hitY] = unobstructedPosition(path,lane,high);
-    return {time:high,x:hitX,triangle:roofAt(hitX,hitY,triangles)};
+  const duration = rollDuration(drop);
+  if(elapsed <= landingTime){
+    const t = (elapsed-exitTime)/(landingTime-exitTime);
+    return [laneX(drop.lane),slideY(binTop-7,duration ? rollingY : restingY,t)];
   }
-  return null;
-}
+  if(!duration) return [laneX(drop.slot),restingY];
 
-function rollDuration(drop){
-  return 300+3*Math.abs(laneX(drop.slot)-drop.contact.x);
-}
-
-function endTime(drop){
-  return drop.contact ? drop.contact.time+rollDuration(drop) : landingTime;
-}
-
-function position(drop,elapsed){
-  const {contact,path,lane,slot} = drop;
-  if(!contact || elapsed < contact.time) return unobstructedPosition(path,lane,elapsed);
-  const progress = Math.min(1,(elapsed-contact.time)/rollDuration(drop));
-  const travel = Math.min(1,progress/.73);
-  const target = laneX(slot);
-  if(travel === 1) return [target,slideY(gateY,restingY,(progress-.73)/.27)];
-  const x = contact.x+(target-contact.x)*travel*(.55+.45*travel);
-  return [x,Math.min(gateY,roofSupportY(x,contact.triangle))];
+  const t = Math.min(1,(elapsed-landingTime)/duration);
+  const travel = Math.min(1,t/.78);
+  const x = laneX(drop.lane + (drop.slot-drop.lane)*travel);
+  if(travel < 1) return [x,rollingY-9*Math.sin(Math.PI*travel)];
+  return [x,slideY(rollingY,restingY,(t-.78)/.22)];
 }
 
 function animate(now){
@@ -576,7 +517,8 @@ function animate(now){
   time += Math.min(now-(previousFrame ?? now),64)*speed;
   previousFrame = now;
   const drop = drops[completed];
-  if(time >= endTime(drop)){
+  const duration = rollDuration(drop);
+  if(time >= landingTime + duration){
     settle(drop);
     dropping = false;
     if(completed === drops.length) finishRound();
@@ -586,12 +528,12 @@ function animate(now){
     }
     return;
   }
-  if(drop.contact && time >= drop.contact.time){
-    const direction = laneX(drop.slot) < drop.contact.x ? '왼쪽' : '오른쪽';
+  if(time >= landingTime){
+    const direction = drop.slot < drop.lane ? '왼쪽' : '오른쪽';
     const status = `${drop.person.name} 구슬이 ${direction} 빈칸으로 이동 중`;
     if($('status').textContent !== status) $('status').textContent = status;
   }
-  const hit = Math.max(0,Math.min(rows,1+Math.floor(((drop.contact ? Math.min(time,drop.contact.time) : time)-entranceTime)/pegTime)));
+  const hit = Math.max(0,Math.min(rows,1+Math.floor((time-entranceTime)/pegTime)));
   if(hit > lastPeg){
     lastPeg = hit;
     playTone(530 + hit * 42,.055,'triangle');
@@ -698,12 +640,6 @@ function drawArch(offset,color){
   ctx.stroke();
 }
 
-function drawPeg(x,y){
-  circle(x,y,4.3,'#fff9e7');
-  circle(x,y,2.8,'#8e7346');
-  circle(x-.55,y-.6,.9,'#f5d899');
-}
-
 function paintBackdrop(){
   ctx.setTransform(2,0,0,2,-viewLeft*2,0);
   const background = ctx.createLinearGradient(0,0,0,height);
@@ -742,33 +678,12 @@ function paintBackdrop(){
     for(let col=0;col<=row;col++){
       const x=centerX+(2*col-row)*laneWidth/2;
       const y=pegY(row);
-      drawPeg(x,y);
+      circle(x,y,4.3,'#fff9e7');
+      circle(x,y,2.8,'#8e7346');
+      circle(x-.55,y-.6,.9,'#f5d899');
     }
   }
   backdrop.getContext('2d').drawImage(canvas,0,0);
-}
-
-function drawClosedTriangles(){
-  for(const triangle of closedTriangles(settledSlots.keys())){
-    const {left,right,center,apexY,count} = triangle;
-    ctx.beginPath();
-    ctx.moveTo(left,gateY);
-    ctx.lineTo(center,apexY);
-    ctx.lineTo(right,gateY);
-    ctx.closePath();
-    ctx.fillStyle = '#e9d2a5';
-    ctx.fill();
-    ctx.strokeStyle = '#99723c';
-    ctx.lineWidth = 2.2;
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-    for(let step=0;step<count;step++){
-      drawPeg(left+step*laneWidth,gateY);
-      drawPeg(left+step*laneWidth/2,gateY-step*pegSpacing);
-      drawPeg(right-step*laneWidth/2,gateY-step*pegSpacing);
-    }
-    drawPeg(center,apexY);
-  }
 }
 
 function drawBoard(active,elapsed){
@@ -777,7 +692,7 @@ function drawBoard(active,elapsed){
     const x = laneX(slot);
     const occupied = settledSlots.has(slot);
     const extra = slot < 0 || slot >= laneCount;
-    const top = extra ? gateY : binTop;
+    const top = extra ? rollingY-radius : binTop;
     ctx.fillStyle = occupied ? '#f2e6cbbd' : extra ? '#ebdfc97a' : slot % 2 ? '#f9f5eaac' : '#edf0f7b8';
     const left = x - laneWidth/2;
     ctx.fillRect(left+1,top,laneWidth-2,floorY-top);
@@ -790,10 +705,9 @@ function drawBoard(active,elapsed){
   }
   const trayLeft = laneX(leftSlot) - laneWidth/2;
   const trayRight = laneX(rightSlot) + laneWidth/2;
-  line(trayRight,rightSlot >= laneCount ? gateY : binTop,trayRight,floorY,'#bbac8d');
+  line(trayRight,rightSlot >= laneCount ? rollingY-radius : binTop,trayRight,floorY,'#bbac8d');
   line(trayLeft,floorY,trayRight,floorY,'#a2824b',1.4);
 
-  drawClosedTriangles();
   settledSlots.forEach((drop,slot) => drawMarble(laneX(slot),restingY,drop.person));
 
   if(active){
